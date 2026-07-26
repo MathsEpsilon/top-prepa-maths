@@ -96,6 +96,12 @@
     font-size:15px; font-weight:700; cursor:pointer; margin-bottom:6px;
   }
   .btn-fb:hover { filter:brightness(1.1); }
+  .btn-google {
+    width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:12px; border:1.5px solid #cbd5e1; border-radius:11px; background:#fff; color:#1e293b;
+    font-size:15px; font-weight:700; cursor:pointer; margin-bottom:6px;
+  }
+  .btn-google:hover { background:#f8fafc; }
   .sep { display:flex; align-items:center; gap:12px; color:#94a3b8; font-size:12.5px; margin:12px 0; }
   .sep::before, .sep::after { content:''; flex:1; height:1px; background:#e2e8f0; }
   .auth-msg { margin-top:12px; font-size:13.5px; text-align:center; min-height:18px; }
@@ -210,6 +216,9 @@
   .top-item { font-size:12.5px; padding:7px 4px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; gap:8px; }
   .top-item span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .top-item .tn { color:var(--bleu2); font-weight:800; white-space:nowrap; }
+  .top-item.user-row { flex-direction:column; align-items:flex-start; gap:2px; cursor:default; }
+  .top-item.user-row .row-top { display:flex; justify-content:space-between; width:100%; gap:8px; }
+  .top-item.user-row .row-loc { font-size:11px; color:var(--gris); }
   #stUsersDetails { margin:16px 0 8px; }
   #stUsersDetails summary {
     color:var(--gris); font-size:12.5px; letter-spacing:1px; text-transform:uppercase; font-weight:700;
@@ -491,20 +500,31 @@
         <div class="field"><label data-i18n="lblPseudo">Identifiant unique (pseudo)</label><input type="text" id="suUser" placeholder="ex : ahmed.karray" maxlength="30" autocomplete="off"></div>
         <div class="field"><label data-i18n="lblEmail">Adresse e-mail (Gmail ou autre)</label><input type="email" id="suEmail" placeholder="exemple@gmail.com" autocomplete="email"></div>
         <div class="field">
-          <label>Région/Ville</label>
+          <label data-i18n="lblRegion">Région/Ville</label>
           <select id="suRegion" required style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; background:#fff;" onchange="updateCities()">
-            <option value="">Sélectionnez votre région</option>
-            <option value="Tunisie">Tunisie</option>
-            <option value="Arabie Saoudite">Arabie Saoudite</option>
+            <option value="" data-i18n="phRegion">Sélectionnez votre région</option>
+            <option value="Tunisie" data-i18n="regionTunisia">Tunisie</option>
+            <option value="Arabie Saoudite" data-i18n="regionSaudi">Arabie Saoudite</option>
           </select>
         </div>
         <div class="field">
-          <label>Ville (optionnel)</label>
+          <label data-i18n="lblCity">Ville (optionnel)</label>
           <select id="suCity" required style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; background:#fff;">
-            <option value="">Sélectionnez votre ville</option>
+            <option value="" data-i18n="phCity">Sélectionnez votre ville</option>
           </select>
         </div>
         <button class="btn-main" onclick="doSignup()" data-i18n="btnSignup">Créer mon compte</button>
+      </div>
+      <div id="socialLogin">
+        <div class="sep"><span data-i18n="orSep">ou</span></div>
+        <button class="btn-fb" onclick="fbLogin()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M22 12.06C22 6.507 17.523 2 12 2S2 6.507 2 12.06c0 5.019 3.657 9.184 8.438 9.94v-7.03H7.898v-2.91h2.54V9.845c0-2.507 1.492-3.89 3.777-3.89 1.094 0 2.238.196 2.238.196v2.459h-1.26c-1.243 0-1.63.771-1.63 1.562v1.878h2.773l-.443 2.91h-2.33V22c4.78-.756 8.437-4.921 8.437-9.94z"/></svg>
+          <span data-i18n="btnFb">Continuer avec Facebook</span>
+        </button>
+        <button class="btn-google" onclick="googleLogin()">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.43 3.58v2.98h3.91c2.29-2.11 3.54-5.21 3.54-8.8z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.91-2.98c-1.09.73-2.5 1.16-4.02 1.16-3.09 0-5.71-2.09-6.65-4.9H1.28v3.07C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.35 14.37A7.15 7.15 0 0 1 5 12c0-.82.14-1.62.35-2.37V6.56H1.28A11.98 11.98 0 0 0 0 12c0 1.93.47 3.76 1.28 5.44l4.07-3.07z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.94 1.2 15.24 0 12 0 7.31 0 3.26 2.7 1.28 6.56l4.07 3.07C6.29 6.86 8.91 4.77 12 4.77z"/></svg>
+          <span data-i18n="btnGoogle">Continuer avec Google</span>
+        </button>
       </div>
       <div id="confirmPanel" style="display:none; text-align:center">
         <h3 style="color:#16a34a; margin-bottom:10px" data-i18n="confTitle">✅ Compte créé !</h3>
@@ -637,7 +657,7 @@
       <div class="stat-card"><span data-i18n="statFiles">📄 Fichiers</span><b id="stFiles">0</b></div>
       <div class="stat-card"><span data-i18n="statDl">⬇ Téléchargements</span><b id="stDl">0</b></div>
       <details id="stUsersDetails">
-        <summary>👥 Liste des inscrits (<span id="stUsersCount">0</span>)</summary>
+        <summary><span data-i18n="statUsersList">👥 Liste des inscrits</span> (<span id="stUsersCount">0</span>)</summary>
         <div id="stUsers"></div>
       </details>
       <h4>🏆 Top téléchargements</h4>
@@ -667,12 +687,12 @@
    CONFIGURATION FIREBASE — insérée (projet : excellence-academique-69a1d)
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "AIzaSyDMmPq0rwE3uM7W9lebui76hqt-W-s2dyY",
+  apiKey: "AIzaSyDMaPq0rwE3uM7W9tebui76hqt-W-s2dyY",
   authDomain: "excellence-academique-69a1d.firebaseapp.com",
   projectId: "excellence-academique-69a1d",
   storageBucket: "excellence-academique-69a1d.firebasestorage.app",
-  messagingSenderId: "959794318636",
-  appId: "1:959794318636:web:c930ad1209b2dd778f64c9",
+  messagingSenderId: "959794310636",
+  appId: "1:959794310636:web:c930ad1289b2dd770764c9",
   measurementId: "G-776N3XVW6D"
 };
 
@@ -748,6 +768,10 @@ const I18N = {
   statByDay: { fr:'📅 Connexions par jour', en:'📅 Connections per day' },
   orSep:     { fr:'ou', en:'or' },
   btnFb:     { fr:'Continuer avec Facebook', en:'Continue with Facebook' },
+  btnGoogle: { fr:'Continuer avec Google', en:'Continue with Google' },
+  errGoogleNotEnabled:{ fr:'Connexion Google non activée : dans la console Firebase → Authentication → Sign-in method, activez « Google ».', en:'Google login not enabled: in the Firebase console → Authentication → Sign-in method, enable "Google".' },
+  errGoogleClosed:    { fr:'Fenêtre Google fermée avant la connexion.', en:'Google window closed before signing in.' },
+  errGoogleFail:      { fr:'Connexion Google impossible : ', en:'Google login failed: ' },
   closePrev: { fr:'✕ Fermer', en:'✕ Close' },
   btnPdfX:   { fr:'📄 Exporter en PDF', en:'📄 Export as PDF' },
   statViews: { fr:'👁 Les plus consultés', en:'👁 Most viewed' },
@@ -755,8 +779,32 @@ const I18N = {
   newTag:    { fr:'NOUVEAU', en:'NEW' },
   srchNone:  { fr:'Aucun document trouvé', en:'No document found' },
   notSpecified: { fr:'Non spécifiée', en:'Not specified' },
+  statUsersList: { fr:'👥 Liste des inscrits', en:'👥 Registered users list' },
   dupClean:  { fr:'🧹 Supprimer les doublons', en:'🧹 Remove duplicates' },
-  previewT:  { fr:'👁 Aperçu', en:'👁 Preview' }
+  previewT:  { fr:'👁 Aperçu', en:'👁 Preview' },
+
+  /* --- Ajouts : formulaire région/ville + messages d'erreur (connexion/inscription) --- */
+  lblRegion: { fr:'Région/Ville', en:'Region/City' },
+  lblCity:   { fr:'Ville (optionnel)', en:'City (optional)' },
+  phRegion:  { fr:'Sélectionnez votre région', en:'Select your region' },
+  phCity:    { fr:'Sélectionnez votre ville', en:'Select your city' },
+  regionTunisia: { fr:'Tunisie', en:'Tunisia' },
+  regionSaudi:   { fr:'Arabie Saoudite', en:'Saudi Arabia' },
+  errRequired:    { fr:'Champs requis', en:'Required fields' },
+  errUserNotFound:{ fr:'Utilisateur introuvable', en:'User not found' },
+  errLoginConn:   { fr:'Erreur de connexion', en:'Connection error' },
+  errPassWrong:   { fr:'Mot de passe incorrect', en:'Incorrect password' },
+  errFillAll:     { fr:'Veuillez remplir tous les champs', en:'Please fill in all fields' },
+  errRegionCity:  { fr:'Veuillez sélectionner votre région et votre ville', en:'Please select your region and city' },
+  errUserTaken:   { fr:'Cet identifiant est déjà pris', en:'This username is already taken' },
+  errCreateFail:  { fr:'Erreur lors de la création', en:'Error creating account' },
+  errFailed:      { fr:'Échec', en:'Failed' },
+  errUnknown:     { fr:'erreur inconnue', en:'unknown error' },
+  errSeeConsole:  { fr:'voir la console (F12)', en:'see console (F12)' },
+  groupPromptQ:   { fr:'À quel groupe appartient cet étudiant ?\n1 = Prépa (Tunisie)\n2 = Saoudiens', en:'Which group does this student belong to?\n1 = Prepa (Tunisia)\n2 = Saudi' },
+  errFbNotEnabled:{ fr:'Connexion Facebook non activée : dans la console Firebase → Authentication → Sign-in method, activez « Facebook ».', en:'Facebook login not enabled: in the Firebase console → Authentication → Sign-in method, enable "Facebook".' },
+  errFbClosed:    { fr:'Fenêtre Facebook fermée avant la connexion.', en:'Facebook window closed before signing in.' },
+  errFbFail:      { fr:'Connexion Facebook impossible : ', en:'Facebook login failed: ' }
 };
 
 /* ================= Structure des Matières (Sidebar) avec Permissions ================= */
@@ -899,7 +947,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if(I18N[key]) el.innerText = I18N[key][lang];
+    if(I18N[key]) { if (el.tagName === 'OPTION') el.textContent = I18N[key][lang]; else el.innerText = I18N[key][lang]; }
   });
   document.querySelectorAll('[data-i18n-ph]').forEach(el => {
     const key = el.getAttribute('data-i18n-ph');
@@ -915,6 +963,7 @@ function toggleLang() {
   localStorage.setItem('rp_lang', lang);
   applyLang();
   if(currentUser) { buildSidebar(); loadFiles(); }
+  if(window._lastUsersSnap) renderUsersList(window._lastUsersSnap);
 }
 
 function switchTab(t) {
@@ -923,6 +972,7 @@ function switchTab(t) {
   document.getElementById('loginForm').style.display = t==='login'?'block':'none';
   document.getElementById('signupForm').style.display = t==='signup'?'block':'none';
   document.getElementById('confirmPanel').style.display = 'none';
+  document.getElementById('socialLogin').style.display = 'block';
 }
 
 /* ================= Authentification ================= */
@@ -988,7 +1038,7 @@ function doLogin() {
   const pass = document.getElementById('loginPass').value.trim();
   const msg = document.getElementById('authMsg');
 
-  if(!userOrEmail || !pass) { showMsg(msg, "Champs requis", true); return; }
+  if(!userOrEmail || !pass) { showMsg(msg, I18N.errRequired[lang], true); return; }
 
   /* ---- Compte administrateur : vérifié via Firebase Authentication            ---- */
   /* ✅ Plus de mot de passe en clair dans le code : la vérification se fait      */
@@ -1002,7 +1052,7 @@ function doLogin() {
       })
       .catch(err => {
         console.error('Erreur de connexion admin Firebase :', err.code, err.message);
-        showMsg(msg, `Échec (${err.code || 'erreur inconnue'}) : ${err.message || 'voir la console (F12)'}`, true);
+        showMsg(msg, `${I18N.errFailed[lang]} (${err.code || I18N.errUnknown[lang]}) : ${err.message || I18N.errSeeConsole[lang]}`, true);
       });
     return;
   }
@@ -1010,13 +1060,13 @@ function doLogin() {
   db.collection('users').where('searchKey', '==', userOrEmail).get().then(snap => {
     if(snap.empty) {
       db.collection('users').where('email', '==', userOrEmail).get().then(snap2 => {
-        if(snap2.empty) { showMsg(msg, "Utilisateur introuvable", true); }
+        if(snap2.empty) { showMsg(msg, I18N.errUserNotFound[lang], true); }
         else { verifyPassword(snap2.docs[0].data(), pass, msg); }
       });
     } else {
       verifyPassword(snap.docs[0].data(), pass, msg);
     }
-  }).catch(() => showMsg(msg, "Erreur de connexion", true));
+  }).catch(() => showMsg(msg, I18N.errLoginConn[lang], true));
 }
 
 function verifyPassword(user, pass, msgEl) {
@@ -1035,7 +1085,7 @@ function verifyPassword(user, pass, msgEl) {
     };
     loginAs(fullUser);
   } else {
-    showMsg(msgEl, "Mot de passe incorrect", true);
+    showMsg(msgEl, I18N.errPassWrong[lang], true);
   }
 }
 
@@ -1045,7 +1095,7 @@ function updateCities() {
   const citySelect = document.getElementById('suCity');
   const region = regionSelect.value;
   
-  citySelect.innerHTML = '<option value="">Sélectionnez votre ville</option>';
+  citySelect.innerHTML = `<option value="">${I18N.phCity[lang]}</option>`;
   
   if (region && REGIONS[region]) {
     REGIONS[region].forEach(city => {
@@ -1065,18 +1115,18 @@ function doSignup() {
   const city = document.getElementById('suCity').value.trim();
   const msg = document.getElementById('authMsg');
 
-  if(!name || !user || !email) { showMsg(msg, "Veuillez remplir tous les champs", true); return; }
-  if(!region || !city) { showMsg(msg, "Veuillez sélectionner votre région et votre ville", true); return; }
+  if(!name || !user || !email) { showMsg(msg, I18N.errFillAll[lang], true); return; }
+  if(!region || !city) { showMsg(msg, I18N.errRegionCity[lang], true); return; }
 
   db.collection('users').doc(user).get().then(doc => {
-    if(doc.exists) { showMsg(msg, "Cet identifiant est déjà pris", true); return; }
+    if(doc.exists) { showMsg(msg, I18N.errUserTaken[lang], true); return; }
 
     // Génération automatique du mot de passe démarrant par "cc"
     const rand = Math.floor(1000 + Math.random() * 9000);
     const generatedPassword = "cc" + rand;
 
     // ✅ Demander à quel groupe appartient l'étudiant
-    const groupChoice = prompt('À quel groupe appartient cet étudiant ?\n1 = Prépa (Tunisie)\n2 = Saoudiens', '1');
+    const groupChoice = prompt(I18N.groupPromptQ[lang], '1');
     const groupMap = { '1': 'prepa', '2': 'saudi' };
     const studentGroup = groupMap[groupChoice] || 'prepa';
 
@@ -1096,9 +1146,10 @@ function doSignup() {
     db.collection('users').doc(user).set(newUser).then(() => {
       document.getElementById('genPass').innerText = generatedPassword;
       document.getElementById('signupForm').style.display = 'none';
+      document.getElementById('socialLogin').style.display = 'none';
       document.getElementById('confirmPanel').style.display = 'block';
     });
-  }).catch(() => showMsg(msg, "Erreur lors de la création", true));
+  }).catch(() => showMsg(msg, I18N.errCreateFail[lang], true));
 }
 
 function afterConfirm() {
@@ -1132,11 +1183,47 @@ function fbLogin() {
     });
   }).catch(err => {
     if (err && (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found')) {
-      showMsg(msg, "Connexion Facebook non activée : dans la console Firebase → Authentication → Sign-in method, activez « Facebook ».", true);
+      showMsg(msg, I18N.errFbNotEnabled[lang], true);
     } else if (err && err.code === 'auth/popup-closed-by-user') {
-      showMsg(msg, "Fenêtre Facebook fermée avant la connexion.", true);
+      showMsg(msg, I18N.errFbClosed[lang], true);
     } else {
-      showMsg(msg, "Connexion Facebook impossible : " + (err && err.message ? err.message : ''), true);
+      showMsg(msg, I18N.errFbFail[lang] + (err && err.message ? err.message : ''), true);
+    }
+  });
+}
+
+/* ---- Connexion avec Google (Firebase Authentication) ---- */
+function googleLogin() {
+  const msg = document.getElementById('authMsg');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).then(res => {
+    const fu = res.user;
+    const uname = (fu.email ? fu.email.split('@')[0] : 'gg_' + fu.uid.slice(0, 10))
+                  .toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    db.collection('users').doc(uname).get().then(doc => {
+      const userObj = doc.exists ? doc.data() : {
+        name: fu.displayName || uname,
+        username: uname,
+        searchKey: uname,
+        email: fu.email || '',
+        region: '',
+        city: '',
+        password: '(google)',
+        role: 'student',
+        group: 'prepa',
+        provider: 'google',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const go = () => { logConnection(userObj); loginAs(userObj); };
+      if (doc.exists) go(); else db.collection('users').doc(uname).set(userObj).then(go);
+    });
+  }).catch(err => {
+    if (err && (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found')) {
+      showMsg(msg, I18N.errGoogleNotEnabled[lang], true);
+    } else if (err && err.code === 'auth/popup-closed-by-user') {
+      showMsg(msg, I18N.errGoogleClosed[lang], true);
+    } else {
+      showMsg(msg, I18N.errGoogleFail[lang] + (err && err.message ? err.message : ''), true);
     }
   });
 }
@@ -1170,30 +1257,38 @@ setInterval(() => {
   if (currentUser) setUserPresence(currentUser.username, true);
 }, 60000);
 
+function renderUsersList(snap) {
+  if (!snap) return;
+  const cnt = document.getElementById('stUsersCount');
+  if (cnt) cnt.innerText = snap.size;
+  const ul = document.getElementById('stUsers');
+  if (!ul) return;
+  ul.innerHTML = '';
+  const tries = snap.docs.slice().sort((a, b) => String(a.data().name||'').localeCompare(String(b.data().name||'')));
+  tries.forEach(doc => {
+    const u = doc.data();
+    const region = u.region || '';
+    const city = u.city || '';
+    const loc = region ? (city ? `${region} • ${city}` : region) : I18N.notSpecified[lang];
+    const row = document.createElement('div');
+    row.className = 'top-item user-row';
+    row.title = u.email || '';
+    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+    ul.appendChild(row);
+  });
+  if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
+}
+
 function startRealtimeListeners() {
   if (window._rtStarted) return;
   window._rtStarted = true;
 
   // 1. Écoute des inscrits totaux
   db.collection('users').onSnapshot(snap => {
+    window._lastUsersSnap = snap;
     document.getElementById('totalUsers').innerText = snap.size;
     document.getElementById('stReg').innerText = snap.size;
-    const cnt = document.getElementById('stUsersCount');
-    if (cnt) cnt.innerText = snap.size;
-    const ul = document.getElementById('stUsers');
-    if (ul) {
-      ul.innerHTML = '';
-      const tries = snap.docs.slice().sort((a, b) => String(a.data().name||'').localeCompare(String(b.data().name||'')));
-      tries.forEach(doc => {
-        const u = doc.data();
-        const row = document.createElement('div');
-        row.className = 'top-item';
-        row.title = u.email || '';
-        row.innerHTML = `<span>${u.name || doc.id}</span><span class="tn">${doc.id}</span>`;
-        ul.appendChild(row);
-      });
-      if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
-    }
+    renderUsersList(snap);
   }, err => {
     // ✅ Si les règles Firestore bloquent la lecture (permission-denied), on le voit ici au lieu d'un "0" silencieux
     console.error('Lecture de la collection "users" impossible :', err);
@@ -1667,12 +1762,34 @@ function loadFiles() {
   document.getElementById('bannerSub').innerText = trNav(activeLeaf || "Documents d'études");
   titleEl.innerText = trNav(activeLeaf || 'Fichiers disponibles');
 
-  /* ✅ Formule adaptée à chaque cours */
+  /* ✅ Formule adaptée à chaque cours (dépend du CHAPITRE et, pour la prépa, du NIVEAU/classe) */
   try {
     const bf = document.getElementById('bannerFormula');
+
+    /* Prépa : mêmes intitulés de chapitre (ANALYSE/ALGÈBRE) pour les 4 classes,
+       donc on distingue par niveau (1ère/2ème année) et par classe pour éviter
+       d'afficher toujours la même formule. */
+    const LEVEL_FORMULAS = {
+      p_classe_pt: {
+        'ANALYSE': "\\forall \\varepsilon>0,\\ \\exists N,\\ \\forall n\\ge N,\\ |u_n-\\ell|<\\varepsilon",
+        'ALGÈBRE': "z = re^{i\\theta},\\quad z^n = r^n e^{in\\theta}"
+      },
+      p_classe_m: {
+        'ANALYSE': "f \\text{ continue en } x_0 \\iff \\lim_{x\\to x_0} f(x) = f(x_0)",
+        'ALGÈBRE': "P(X)=\\sum_{k=0}^n a_k X^k,\\quad \\deg(P)=n"
+      },
+      d_classe_spst: {
+        'ANALYSE': "\\lim_{n \\to +\\infty}\\ \\sum_{p=n+1}^{2n} \\sin\\!\\left(\\frac{1}{p}\\right) = \\ln 2",
+        'ALGÈBRE': "\\det(AB)=\\det(A)\\,\\det(B),\\quad A,B\\in\\mathcal{M}_n(\\mathbb{K})"
+      },
+      d_classe_sm: {
+        'ANALYSE': "\\int_a^b f(x)\\,dx = \\lim_{n\\to\\infty}\\sum_{k=1}^n f(x_k)\\Delta x",
+        'ALGÈBRE': "A = PDP^{-1},\\quad D=\\text{diag}(\\lambda_1,\\dots,\\lambda_n)"
+      }
+    };
+
+    /* Licence / Bac : chaque chapitre a déjà un intitulé unique */
     const formulaMap = {
-      'ANALYSE': "\\lim_{n \\to +\\infty}\\ \\sum_{p=n+1}^{2n} \\sin\\!\\left(\\frac{1}{p}\\right) = \\ln 2",
-      'ALGÈBRE': "\\det(AB)=\\det(A)\\,\\det(B),\\quad A,B\\in\\mathcal{M}_n(\\mathbb{K})",
       'ODE': "y' + p(x)y = q(x)",
       'Measure theory': "\\int_A f \\, d\\mu",
       'Integration': "\\int_a^b f(x)\\,dx = F(b) - F(a)",
@@ -1686,7 +1803,10 @@ function loadFiles() {
       'Bac Sciences Expérimentales': "v = v_0 + a\\,t",
       'Bac Mathématiques': "e^{i\\theta} = \\cos\\theta + i\\sin\\theta"
     };
-    const formula = formulaMap[activeSub] || "f(x)=\\sum_{n=0}^{\\infty}\\frac{f^{(n)}(a)}{n!}\\,(x-a)^n";
+
+    const formula = (LEVEL_FORMULAS[activeFolder] && LEVEL_FORMULAS[activeFolder][activeSub])
+      || formulaMap[activeSub]
+      || "f(x)=\\sum_{n=0}^{\\infty}\\frac{f^{(n)}(a)}{n!}\\,(x-a)^n";
     katex.render(formula, bf, { throwOnError:false });
   } catch(e) {}
 
