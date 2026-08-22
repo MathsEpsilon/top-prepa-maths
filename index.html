@@ -90,12 +90,6 @@
     background:linear-gradient(135deg,#0f2a5c,#1d4ed8); color:#fff; font-size:16px; font-weight:700; cursor:pointer;
   }
   .btn-main:hover { filter:brightness(1.15); }
-  .btn-fb {
-    width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
-    padding:12px; border:none; border-radius:11px; background:#1877f2; color:#fff;
-    font-size:15px; font-weight:700; cursor:pointer; margin-bottom:6px;
-  }
-  .btn-fb:hover { filter:brightness(1.1); }
   .btn-google {
     width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
     padding:12px; border:1.5px solid #cbd5e1; border-radius:11px; background:#fff; color:#1e293b;
@@ -304,6 +298,33 @@
   .btn-mv { border:none; background:#eff6ff; color:var(--bleu2); width:28px; height:28px; border-radius:7px; cursor:pointer; font-weight:800; }
   .btn-mv:hover { background:var(--bleu2); color:#fff; }
   .btn-mv:disabled { opacity:.3; cursor:default; }
+
+  /* ============ CHAPITRES (dossiers personnalisés créés par l'admin, en accordéon) ============ */
+  #chapterBar { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:0 0 14px; width:100%; }
+  .chapter-wrap { width:100%; }
+  .chip { padding:7px 14px; border-radius:12px; background:#eef2f7; color:var(--texte); font-weight:600; font-size:13.5px; cursor:pointer; border:2px solid transparent; white-space:nowrap; display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; }
+  .chip:hover { background:#e2e8f0; }
+  .chip.open { background:var(--bleu2); color:#fff; border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  .chip.add-chip { background:#fff; border:2px dashed #94a3b8; color:#64748b; }
+  .chip.add-chip:hover { border-color:var(--bleu2); color:var(--bleu2); }
+  .chip .chip-label { flex:1; display:flex; align-items:center; gap:6px; min-width:0; }
+  .chip .chip-name { cursor:text; padding:2px 4px; border-radius:5px; outline:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .chip .chip-name.editing { background:rgba(255,255,255,.25); box-shadow:0 0 0 2px rgba(255,255,255,.6) inset; white-space:normal; }
+  .chip.open .chip-name.editing { background:rgba(255,255,255,.9); color:var(--texte); }
+  .chip .chip-count { opacity:.75; white-space:nowrap; flex-shrink:0; }
+  .chip .chip-x, .chip .chip-up, .chip .chip-dn, .chip .chip-ren, .chip .chip-addpdf { opacity:.75; font-weight:800; flex-shrink:0; }
+  .chip .chip-x:hover, .chip .chip-up:hover, .chip .chip-dn:hover, .chip .chip-ren:hover, .chip .chip-addpdf:hover { opacity:1; }
+  .chip .chip-addpdf { font-size:12px; font-weight:700; }
+  .btn-chset { border:none; background:#f5f3ff; color:#7c3aed; width:28px; height:28px; border-radius:7px; cursor:pointer; font-weight:700; font-size:13px; }
+  .btn-chset:hover { background:#7c3aed; color:#fff; }
+
+  /* ✅ Bouton ouvrir/fermer : deux couleurs distinctes selon l'état */
+  .chip-toggle { flex-shrink:0; width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; }
+  .chip-toggle.is-closed { background:#fbbf24; color:#78350f; }
+  .chip-toggle.is-open { background:#22c55e; color:#fff; }
+  .chapter-files { background:#f8fafc; border:2px solid var(--bleu2); border-top:none; border-bottom-left-radius:12px; border-bottom-right-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .chapter-files .empty-mini { padding:14px; text-align:center; color:#94a3b8; font-size:13px; }
+
 
   /* ===== Heatmap d'activité ===== */
   .heat-row { display:flex; gap:2px; align-items:flex-end; height:46px; margin-top:4px; }
@@ -517,10 +538,6 @@
       </div>
       <div id="socialLogin">
         <div class="sep"><span data-i18n="orSep">ou</span></div>
-        <button class="btn-fb" onclick="fbLogin()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M22 12.06C22 6.507 17.523 2 12 2S2 6.507 2 12.06c0 5.019 3.657 9.184 8.438 9.94v-7.03H7.898v-2.91h2.54V9.845c0-2.507 1.492-3.89 3.777-3.89 1.094 0 2.238.196 2.238.196v2.459h-1.26c-1.243 0-1.63.771-1.63 1.562v1.878h2.773l-.443 2.91h-2.33V22c4.78-.756 8.437-4.921 8.437-9.94z"/></svg>
-          <span data-i18n="btnFb">Continuer avec Facebook</span>
-        </button>
         <button class="btn-google" onclick="googleLogin()">
           <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.43 3.58v2.98h3.91c2.29-2.11 3.54-5.21 3.54-8.8z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.91-2.98c-1.09.73-2.5 1.16-4.02 1.16-3.09 0-5.71-2.09-6.65-4.9H1.28v3.07C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.35 14.37A7.15 7.15 0 0 1 5 12c0-.82.14-1.62.35-2.37V6.56H1.28A11.98 11.98 0 0 0 0 12c0 1.93.47 3.76 1.28 5.44l4.07-3.07z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.94 1.2 15.24 0 12 0 7.31 0 3.26 2.7 1.28 6.56l4.07 3.07C6.29 6.86 8.91 4.77 12 4.77z"/></svg>
           <span data-i18n="btnGoogle">Continuer avec Google</span>
@@ -598,10 +615,10 @@
           </div>
           <div class="files-head">
             <h3 id="filesTitle"></h3>
-            <button class="btn-add" id="btnAdd" style="display:none" onclick="document.getElementById('pdfInput').click()" data-i18n="btnAdd">+ Ajouter des PDF</button>
+            <button class="btn-add" id="btnAdd" style="display:none" onclick="pendingChapterTarget=null; document.getElementById('pdfInput').click()" data-i18n="btnAdd">+ Ajouter des PDF</button>
           </div>
           <div class="split-wrap" id="splitWrap">
-            <div id="fileListCol"><div id="fileList"></div></div>
+            <div id="fileListCol"><div id="chapterBar"></div><div id="fileList"></div></div>
             <div id="previewPane">
               <div class="preview-head">
                 <b id="previewTitle"></b>
@@ -767,7 +784,6 @@ const I18N = {
   statWho:   { fr:'🟢 Connectés en ce moment', en:'🟢 Online right now' },
   statByDay: { fr:'📅 Connexions par jour', en:'📅 Connections per day' },
   orSep:     { fr:'ou', en:'or' },
-  btnFb:     { fr:'Continuer avec Facebook', en:'Continue with Facebook' },
   btnGoogle: { fr:'Continuer avec Google', en:'Continue with Google' },
   errGoogleNotEnabled:{ fr:'Connexion Google non activée : dans la console Firebase → Authentication → Sign-in method, activez « Google ».', en:'Google login not enabled: in the Firebase console → Authentication → Sign-in method, enable "Google".' },
   errGoogleClosed:    { fr:'Fenêtre Google fermée avant la connexion.', en:'Google window closed before signing in.' },
@@ -781,6 +797,14 @@ const I18N = {
   notSpecified: { fr:'Non spécifiée', en:'Not specified' },
   statUsersList: { fr:'👥 Liste des inscrits', en:'👥 Registered users list' },
   dupClean:  { fr:'🧹 Supprimer les doublons', en:'🧹 Remove duplicates' },
+  chapAll:      { fr:'📚 Tous', en:'📚 All' },
+  chapNone:     { fr:'📄 Sans chapitre', en:'📄 No chapter' },
+  chapAdd:      { fr:'+ Nouveau chapitre', en:'+ New chapter' },
+  chapNamePrompt: { fr:'Nom du nouveau chapitre (ex : Chapitre 1)', en:'Name of the new chapter (e.g. Chapter 1)' },
+  chapDelConfirm: { fr:'Supprimer ce chapitre ? Les PDF qu\'il contient resteront dans le dossier, non classés.', en:'Delete this chapter? The PDFs it contains will remain in the folder, uncategorized.' },
+  chapAssign:   { fr:'Déplacer vers quel chapitre ?', en:'Move to which chapter?' },
+  chapAssignNone: { fr:'0 = Sans chapitre', en:'0 = No chapter' },
+  chapRenamePrompt: { fr:'Nouveau nom du chapitre', en:'New chapter name' },
   previewT:  { fr:'👁 Aperçu', en:'👁 Preview' },
 
   /* --- Ajouts : formulaire région/ville + messages d'erreur (connexion/inscription) --- */
@@ -802,9 +826,6 @@ const I18N = {
   errUnknown:     { fr:'erreur inconnue', en:'unknown error' },
   errSeeConsole:  { fr:'voir la console (F12)', en:'see console (F12)' },
   groupPromptQ:   { fr:'À quel groupe appartient cet étudiant ?\n1 = Prépa (Tunisie)\n2 = Saoudiens', en:'Which group does this student belong to?\n1 = Prepa (Tunisia)\n2 = Saudi' },
-  errFbNotEnabled:{ fr:'Connexion Facebook non activée : dans la console Firebase → Authentication → Sign-in method, activez « Facebook ».', en:'Facebook login not enabled: in the Firebase console → Authentication → Sign-in method, enable "Facebook".' },
-  errFbClosed:    { fr:'Fenêtre Facebook fermée avant la connexion.', en:'Facebook window closed before signing in.' },
-  errFbFail:      { fr:'Connexion Facebook impossible : ', en:'Facebook login failed: ' }
 };
 
 /* ================= Structure des Matières (Sidebar) avec Permissions ================= */
@@ -825,7 +846,7 @@ const STRUCTURE = [
 ];
 
 const REGIONS = {
-  'Tunisie': ['Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Sfax', 'Sousse', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Gafsa', 'Tozeur', 'Kébili', 'Gabès', 'Médenine', 'Tataouine', 'Jendouba', 'Le Kef', 'Siliana'],
+  'Tunisie': ['Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Nabeul', 'Zaghouan', 'Bizerte', 'Béja', 'Jendouba', 'Le Kef', 'Siliana', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Sousse', 'Monastir', 'Mahdia', 'Sfax', 'Gafsa', 'Tozeur', 'Kébili', 'Gabès', 'Médenine', 'Tataouine'],
   'Arabie Saoudite': ['Riyad', 'Jeddah', 'Dammam', 'Médine', 'Makkah', 'Taïf', 'Al-Khobar', 'Abha', 'Tabuk', 'Buraidah', 'Jizan', 'Hail', 'Yanbu', 'Al-Qassim', 'Asir']
 };
 
@@ -931,6 +952,9 @@ let activeLeaf = null;
 let currentView = 'files'; // 'files', 'board', 'visio'
 let openFolders = {};
 let openSubs = {};
+let openChapters = {}; // état ouvert/fermé des chapitres (accordéon)
+let pendingChapterTarget = null; // chapitre ciblé pour le prochain ajout de PDF
+window._curChapters = [];
 
 /* ================= Initialisation au Chargement ================= */
 window.addEventListener('DOMContentLoaded', () => {
@@ -1154,42 +1178,6 @@ function doSignup() {
 
 function afterConfirm() {
   switchTab('login');
-}
-
-/* ---- Connexion avec Facebook (Firebase Authentication) ---- */
-function fbLogin() {
-  const msg = document.getElementById('authMsg');
-  const provider = new firebase.auth.FacebookAuthProvider();
-  firebase.auth().signInWithPopup(provider).then(res => {
-    const fu = res.user;
-    const uname = (fu.email ? fu.email.split('@')[0] : 'fb_' + fu.uid.slice(0, 10))
-                  .toLowerCase().replace(/[^a-z0-9._-]/g, '');
-    db.collection('users').doc(uname).get().then(doc => {
-      const userObj = doc.exists ? doc.data() : {
-        name: fu.displayName || uname,
-        username: uname,
-        searchKey: uname,
-        email: fu.email || '',
-        region: '',
-        city: '',
-        password: '(facebook)',
-        role: 'student',
-        group: 'prepa',
-        provider: 'facebook',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      const go = () => { logConnection(userObj); loginAs(userObj); };
-      if (doc.exists) go(); else db.collection('users').doc(uname).set(userObj).then(go);
-    });
-  }).catch(err => {
-    if (err && (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found')) {
-      showMsg(msg, I18N.errFbNotEnabled[lang], true);
-    } else if (err && err.code === 'auth/popup-closed-by-user') {
-      showMsg(msg, I18N.errFbClosed[lang], true);
-    } else {
-      showMsg(msg, I18N.errFbFail[lang] + (err && err.message ? err.message : ''), true);
-    }
-  });
 }
 
 /* ---- Connexion avec Google (Firebase Authentication) ---- */
@@ -1588,6 +1576,7 @@ function selectCategory(fId, sub, leaf) {
   activeFolder = fId;
   activeSub = sub;
   activeLeaf = leaf;
+  openChapters = {};
   openFolders[fId] = true;
   if (sub) openSubs[fId + '|' + sub] = true;
   currentView = 'files';
@@ -1758,6 +1747,7 @@ function loadFiles() {
   fContainer.innerHTML = '';
 
   const keys = pathKeysFor(activeFolder, activeSub, activeLeaf);
+  window._curKeys = keys;
   document.getElementById('bannerTitle').innerText = trNav(activeSub || 'Licence');
   document.getElementById('bannerSub').innerText = trNav(activeLeaf || "Documents d'études");
   titleEl.innerText = trNav(activeLeaf || 'Fichiers disponibles');
@@ -1810,13 +1800,27 @@ function loadFiles() {
     katex.render(formula, bf, { throwOnError:false });
   } catch(e) {}
 
-  Promise.all(keys.map(k => db.collection('files').where('path', '==', k).get())).then(snaps => {
+  const chaptersPromise = Promise.all(keys.map(k => db.collection('chapters').where('path', '==', k).get()))
+    .catch(err => { console.error('Chapitres indisponibles (règles Firestore ?) :', err); return []; });
+  const filesPromise = Promise.all(keys.map(k => db.collection('files').where('path', '==', k).get()));
+
+  Promise.all([chaptersPromise, filesPromise]).then(([chapSnaps, fileSnaps]) => {
+    /* --- Chapitres : anti-doublons par nom + tri --- */
+    const chapDocs = [];
+    chapSnaps.forEach(sn => sn.docs.forEach(d => chapDocs.push(Object.assign({ id: d.id }, d.data()))));
+    const chapGroups = {};
+    chapDocs.forEach(c => { (chapGroups[c.name] = chapGroups[c.name] || []).push(c); });
+    const chapters = Object.values(chapGroups).map(g => g[0]);
+    chapters.sort((a, b) => (((a.order != null ? a.order : 1e9)) - ((b.order != null ? b.order : 1e9))) || String(a.name||'').localeCompare(String(b.name||'')));
+    window._curChapters = chapters;
+
     const docs = [];
-    snaps.forEach(sn => sn.docs.forEach(d => docs.push(Object.assign({ id: d.id }, d.data()))));
+    fileSnaps.forEach(sn => sn.docs.forEach(d => docs.push(Object.assign({ id: d.id }, d.data()))));
 
     // Repérer les nouveautés AVANT de marquer la section comme vue
     const newIds = {};
     docs.forEach(f => { if (isNewFile(f)) newIds[f.id] = true; });
+    window._newIds = newIds;
     markSeen(keys);
     buildSidebar();
 
@@ -1832,89 +1836,298 @@ function loadFiles() {
 
     /* --- Tri : ordre manuel d'abord, puis alphabétique --- */
     kept.sort((a, b) => (((a.order != null ? a.order : 1e9)) - ((b.order != null ? b.order : 1e9))) || String(a.name||'').localeCompare(String(b.name||'')));
-    window._curDocs = kept;
+    window._curDocsAll = kept;
+    window._curDupes = dupes;
 
-    if (!kept.length) {
-      fContainer.innerHTML = `<div class="empty"><div class="big">📂</div><p>${I18N.emptyDocs[lang]}</p></div>`;
-      return;
-    }
-
-    /* --- Bouton de nettoyage des doublons (admin) --- */
-    if (dupes.length && currentUser.role === 'admin') {
-      const clean = document.createElement('button');
-      clean.className = 'btn-add';
-      clean.style.cssText = 'background:#dc2626;margin-bottom:12px';
-      clean.textContent = `${I18N.dupClean[lang]} (${dupes.length})`;
-      clean.onclick = () => {
-        if (!confirm(dupes.length + ' doublon(s) trouvé(s) dans la base. Les supprimer définitivement ?')) return;
-        const batch = db.batch();
-        dupes.forEach(id => batch.delete(db.collection('files').doc(id)));
-        batch.commit().then(() => { showToast('Doublons supprimés'); loadFiles(); });
-      };
-      fContainer.appendChild(clean);
-    }
-
-    kept.forEach((f, idx) => {
-      const row = document.createElement('div');
-      row.className = 'file-row';
-      row.dataset.id = f.id;
-
-      const ico = document.createElement('div'); ico.className = 'file-ico'; ico.textContent = '📕';
-      const info = document.createElement('div'); info.className = 'file-info';
-      const h4 = document.createElement('h4'); h4.textContent = f.name;
-      if (newIds[f.id]) { const tag = document.createElement('span'); tag.className = 'new-tag'; tag.textContent = I18N.newTag[lang]; h4.appendChild(tag); }
-      const small = document.createElement('small');
-      small.textContent = `${I18N.added[lang]} ${f.date || ''} (${f.size || ''})`;
-      info.appendChild(h4); info.appendChild(small);
-
-      const dl = document.createElement('div'); dl.className = 'dl-count'; dl.textContent = `⬇ ${f.downloads || 0}`;
-
-      const btnDl = document.createElement('button');
-      btnDl.className = 'btn-dl'; btnDl.textContent = I18N.btnDl[lang];
-      btnDl.onclick = (e) => { e.stopPropagation(); downloadPdf(f.id, f.name); };
-
-      row.appendChild(ico); row.appendChild(info); row.appendChild(dl); row.appendChild(btnDl);
-
-      if (currentUser.role === 'admin') {
-        const up = document.createElement('button');
-        up.className = 'btn-mv'; up.textContent = '↑'; up.disabled = idx === 0;
-        up.onclick = (e) => { e.stopPropagation(); movePdf(idx, -1); };
-        const down = document.createElement('button');
-        down.className = 'btn-mv'; down.textContent = '↓'; down.disabled = idx === kept.length - 1;
-        down.onclick = (e) => { e.stopPropagation(); movePdf(idx, 1); };
-        const del = document.createElement('button');
-        del.className = 'btn-x'; del.textContent = '✕';
-        del.onclick = (e) => { e.stopPropagation(); deletePdf(f.id); };
-        row.appendChild(up); row.appendChild(down); row.appendChild(del);
-      }
-
-      // Cliquer sur la ligne ouvre l'aperçu à droite
-      row.onclick = () => previewPdf(f.id, f.name);
-
-      fContainer.appendChild(row);
-    });
+    renderAccordion();
   }).catch(err => {
     console.error(err);
     fContainer.innerHTML = `<p style="padding:20px;text-align:center;color:red;">Erreur lors du chargement des documents.</p>`;
   });
 }
 
-/* --- Réordonner les PDF (admin) : monter / descendre, ordre partagé pour tous --- */
-function movePdf(idx, dir) {
-  const list = window._curDocs.slice();
+/* ================= Affichage en accordéon : chapitres ouvrables/fermables ================= */
+function renderFileRows(container, list, onMove) {
+  const newIds = window._newIds || {};
+  list.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.dataset.id = f.id;
+
+    const ico = document.createElement('div'); ico.className = 'file-ico'; ico.textContent = '📕';
+    const info = document.createElement('div'); info.className = 'file-info';
+    const h4 = document.createElement('h4'); h4.textContent = f.name;
+    if (newIds[f.id]) { const tag = document.createElement('span'); tag.className = 'new-tag'; tag.textContent = I18N.newTag[lang]; h4.appendChild(tag); }
+    const small = document.createElement('small');
+    small.textContent = `${I18N.added[lang]} ${f.date || ''} (${f.size || ''})`;
+    info.appendChild(h4); info.appendChild(small);
+
+    const dl = document.createElement('div'); dl.className = 'dl-count'; dl.textContent = `⬇ ${f.downloads || 0}`;
+
+    const btnDl = document.createElement('button');
+    btnDl.className = 'btn-dl'; btnDl.textContent = I18N.btnDl[lang];
+    btnDl.onclick = (e) => { e.stopPropagation(); downloadPdf(f.id, f.name); };
+
+    row.appendChild(ico); row.appendChild(info); row.appendChild(dl); row.appendChild(btnDl);
+
+    if (currentUser.role === 'admin') {
+      const up = document.createElement('button');
+      up.className = 'btn-mv'; up.textContent = '↑'; up.disabled = idx === 0;
+      up.onclick = (e) => { e.stopPropagation(); onMove(idx, -1); };
+      const down = document.createElement('button');
+      down.className = 'btn-mv'; down.textContent = '↓'; down.disabled = idx === list.length - 1;
+      down.onclick = (e) => { e.stopPropagation(); onMove(idx, 1); };
+      const ch = document.createElement('button');
+      ch.className = 'btn-chset'; ch.textContent = '🔀'; ch.title = I18N.chapAssign[lang];
+      ch.onclick = (e) => { e.stopPropagation(); assignChapterToFile(f); };
+      const del = document.createElement('button');
+      del.className = 'btn-x'; del.textContent = '✕';
+      del.onclick = (e) => { e.stopPropagation(); deletePdf(f.id); };
+      row.appendChild(up); row.appendChild(down); row.appendChild(ch); row.appendChild(del);
+    }
+
+    // Cliquer sur la ligne ouvre l'aperçu à droite
+    row.onclick = () => previewPdf(f.id, f.name);
+
+    container.appendChild(row);
+  });
+}
+
+function renderAccordion() {
+  const bar = document.getElementById('chapterBar');
+  const fContainer = document.getElementById('fileList');
+  bar.innerHTML = '';
+  fContainer.innerHTML = '';
+
+  const chapters = window._curChapters || [];
+  const keptAll = window._curDocsAll || [];
+  const dupes = window._curDupes || [];
+
+  bar.style.display = (chapters.length || currentUser.role === 'admin') ? 'flex' : 'none';
+
+  chapters.forEach((c, idx) => {
+    const chapterFiles = keptAll.filter(f => (f.chapter || null) === c.id);
+    const isOpen = !!openChapters[c.id];
+
+    const wrap = document.createElement('div');
+    wrap.className = 'chapter-wrap';
+
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (isOpen ? ' open' : '');
+    chip.onclick = () => { openChapters[c.id] = !isOpen; renderAccordion(); };
+
+    // ✅ Bouton ouvrir/fermer, deux couleurs distinctes selon l'état
+    const toggle = document.createElement('span');
+    toggle.className = 'chip-toggle ' + (isOpen ? 'is-open' : 'is-closed');
+    toggle.textContent = isOpen ? '▼' : '▶';
+    toggle.title = isOpen ? 'Fermer' : 'Ouvrir';
+    toggle.onclick = (e) => { e.stopPropagation(); openChapters[c.id] = !isOpen; renderAccordion(); };
+    chip.appendChild(toggle);
+
+    const label = document.createElement('span'); label.className = 'chip-label';
+    const icon = document.createElement('span'); icon.textContent = '📁';
+    const nameSpan = document.createElement('span'); nameSpan.className = 'chip-name'; nameSpan.textContent = c.name;
+    const countSpan = document.createElement('span'); countSpan.className = 'chip-count'; countSpan.textContent = `(${chapterFiles.length})`;
+    label.appendChild(icon); label.appendChild(nameSpan); label.appendChild(countSpan);
+    chip.appendChild(label);
+
+    if (currentUser.role === 'admin') {
+      const ren = document.createElement('span'); ren.className = 'chip-ren'; ren.textContent = '✎'; ren.title = I18N.chapRenamePrompt[lang];
+      ren.onclick = (e) => {
+        e.stopPropagation();
+        if (nameSpan.isContentEditable) return;
+        const prevText = nameSpan.textContent;
+        nameSpan.contentEditable = 'true';
+        nameSpan.classList.add('editing');
+        nameSpan.focus();
+        document.execCommand('selectAll', false, null);
+
+        const finish = (save) => {
+          nameSpan.contentEditable = 'false';
+          nameSpan.classList.remove('editing');
+          nameSpan.removeEventListener('blur', onBlur);
+          nameSpan.removeEventListener('keydown', onKey);
+          const newName = nameSpan.textContent.trim();
+          if (save && newName && newName !== c.name) {
+            if ((window._curChapters || []).some(o => o.id !== c.id && o.name.toLowerCase() === newName.toLowerCase())) {
+              alert('Un chapitre porte déjà ce nom.');
+              nameSpan.textContent = prevText;
+              return;
+            }
+            db.collection('chapters').doc(c.id).update({ name: newName }).then(() => {
+              showToast('Chapitre renommé !');
+              loadFiles();
+            }).catch(err => {
+              console.error('Échec du renommage du chapitre :', err);
+              alert(`Échec du renommage : ${err.message || err}`);
+              nameSpan.textContent = prevText;
+            });
+          } else {
+            nameSpan.textContent = prevText;
+          }
+        };
+        const onBlur = () => finish(true);
+        const onKey = (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); nameSpan.blur(); }
+          else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+        };
+        nameSpan.addEventListener('blur', onBlur);
+        nameSpan.addEventListener('keydown', onKey);
+      };
+
+      const addBtn = document.createElement('span'); addBtn.className = 'chip-addpdf'; addBtn.textContent = '＋PDF'; addBtn.title = I18N.chapAdd[lang];
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        pendingChapterTarget = c.id;
+        document.getElementById('pdfInput').click();
+      };
+      const up = document.createElement('span'); up.className = 'chip-up'; up.textContent = '↑'; up.title = 'Monter';
+      up.onclick = (e) => { e.stopPropagation(); moveChapter(idx, -1); };
+      const dn = document.createElement('span'); dn.className = 'chip-dn'; dn.textContent = '↓'; dn.title = 'Descendre';
+      dn.onclick = (e) => { e.stopPropagation(); moveChapter(idx, 1); };
+      const x = document.createElement('span'); x.className = 'chip-x'; x.textContent = '✕'; x.title = 'Supprimer';
+      x.onclick = (e) => { e.stopPropagation(); deleteChapter(c); };
+      chip.appendChild(ren); chip.appendChild(addBtn); chip.appendChild(up); chip.appendChild(dn); chip.appendChild(x);
+    }
+
+    wrap.appendChild(chip);
+
+    if (isOpen) {
+      const inner = document.createElement('div'); inner.className = 'chapter-files';
+      if (!chapterFiles.length) {
+        inner.innerHTML = `<div class="empty-mini">📭 ${I18N.emptyDocs[lang]}</div>`;
+      } else {
+        renderFileRows(inner, chapterFiles, (i, dir) => movePdfInList(chapterFiles, i, dir));
+      }
+      wrap.appendChild(inner);
+    }
+
+    bar.appendChild(wrap);
+  });
+
+  if (currentUser.role === 'admin') {
+    const add = document.createElement('div');
+    add.className = 'chip add-chip';
+    const addLabel = document.createElement('span'); addLabel.className = 'chip-label';
+    addLabel.textContent = I18N.chapAdd[lang];
+    add.appendChild(addLabel);
+    add.onclick = () => createChapter((window._curKeys || [])[0]);
+    bar.appendChild(add);
+  }
+
+  /* --- Bouton de nettoyage des doublons (admin) --- */
+  if (dupes.length && currentUser.role === 'admin') {
+    const clean = document.createElement('button');
+    clean.className = 'btn-add';
+    clean.style.cssText = 'background:#dc2626;margin-bottom:12px';
+    clean.textContent = `${I18N.dupClean[lang]} (${dupes.length})`;
+    clean.onclick = () => {
+      if (!confirm(dupes.length + ' doublon(s) trouvé(s) dans la base. Les supprimer définitivement ?')) return;
+      const batch = db.batch();
+      dupes.forEach(id => batch.delete(db.collection('files').doc(id)));
+      batch.commit().then(() => { showToast('Doublons supprimés'); loadFiles(); });
+    };
+    fContainer.appendChild(clean);
+  }
+
+  /* --- Documents hors chapitre, affichés directement sous les chapitres --- */
+  const unclassified = keptAll.filter(f => !f.chapter);
+
+  if (!unclassified.length && !chapters.length) {
+    fContainer.innerHTML += `<div class="empty"><div class="big">📂</div><p>${I18N.emptyDocs[lang]}</p></div>`;
+    return;
+  }
+
+  if (unclassified.length) {
+    renderFileRows(fContainer, unclassified, (i, dir) => movePdfInList(unclassified, i, dir));
+  }
+}
+
+function createChapter(pathKey) {
+  const name = prompt(I18N.chapNamePrompt[lang]);
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if ((window._curChapters || []).some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+    alert('Un chapitre porte déjà ce nom.');
+    return;
+  }
+  const nextOrder = (window._curChapters || []).length;
+  db.collection('chapters').add({
+    path: pathKey,
+    name: trimmed,
+    order: nextOrder,
+    ts: Date.now()
+  }).then(() => {
+    showToast('Chapitre créé !');
+    loadFiles();
+  }).catch(err => {
+    console.error('Échec de la création du chapitre :', err);
+    alert(`Échec de la création du chapitre : ${err.message || err}`);
+  });
+}
+
+function moveChapter(idx, dir) {
+  const list = (window._curChapters || []).slice();
   const j = idx + dir;
   if (j < 0 || j >= list.length) return;
   const tmp = list[idx]; list[idx] = list[j]; list[j] = tmp;
   const batch = db.batch();
-  list.forEach((f, k) => batch.update(db.collection('files').doc(f.id), { order: k }));
+  list.forEach((c, k) => batch.update(db.collection('chapters').doc(c.id), { order: k }));
+  batch.commit().then(() => loadFiles());
+}
+
+function deleteChapter(chapter) {
+  if (!confirm(I18N.chapDelConfirm[lang])) return;
+  const affected = (window._curDocsAll || []).filter(f => f.chapter === chapter.id);
+  const batch = db.batch();
+  affected.forEach(f => batch.update(db.collection('files').doc(f.id), { chapter: firebase.firestore.FieldValue.delete() }));
+  batch.delete(db.collection('chapters').doc(chapter.id));
+  batch.commit().then(() => {
+    delete openChapters[chapter.id];
+    showToast('Chapitre supprimé');
+    loadFiles();
+  }).catch(err => {
+    console.error('Échec de la suppression du chapitre :', err);
+    alert(`Échec de la suppression : ${err.message || err}`);
+  });
+}
+
+function assignChapterToFile(f) {
+  const chapters = window._curChapters || [];
+  if (!chapters.length) { alert('Créez d\'abord un chapitre avec le bouton « + Nouveau chapitre ».'); return; }
+  const menu = chapters.map((c, i) => `${i + 1} = ${c.name}`).join('\n');
+  const answer = prompt(`${I18N.chapAssign[lang]}\n${I18N.chapAssignNone[lang]}\n${menu}`);
+  if (answer === null) return;
+  const n = parseInt(answer, 10);
+  if (isNaN(n) || n < 0 || n > chapters.length) { alert('Choix invalide.'); return; }
+  const update = n === 0 ? { chapter: firebase.firestore.FieldValue.delete() } : { chapter: chapters[n - 1].id };
+  db.collection('files').doc(f.id).update(update).then(() => loadFiles()).catch(err => {
+    console.error('Échec du déplacement :', err);
+    alert(`Échec : ${err.message || err}`);
+  });
+}
+
+/* --- Réordonner les PDF (admin) : monter / descendre, ordre partagé au sein de leur liste --- */
+function movePdfInList(list, idx, dir) {
+  const arr = list.slice();
+  const j = idx + dir;
+  if (j < 0 || j >= arr.length) return;
+  const tmp = arr[idx]; arr[idx] = arr[j]; arr[j] = tmp;
+  const batch = db.batch();
+  arr.forEach((f, k) => batch.update(db.collection('files').doc(f.id), { order: k }));
   batch.commit().then(() => loadFiles());
 }
 
 function addPdfs(filesList) {
   if(!filesList || filesList.length === 0) return;
   const pathKey = `${activeFolder}_${activeSub}_${activeLeaf}`;
-  const existingNames = (window._curDocs || []).map(f => f.name);
-  let nextOrder = (window._curDocs || []).length;
+  const chapterToAssign = pendingChapterTarget || null;
+  pendingChapterTarget = null;
+  const scopeList = chapterToAssign
+    ? (window._curDocsAll || []).filter(f => f.chapter === chapterToAssign)
+    : (window._curDocsAll || []).filter(f => !f.chapter);
+  const existingNames = scopeList.map(f => f.name);
+  let nextOrder = scopeList.length;
 
   Array.from(filesList).forEach(file => {
     // ⚠️ Firestore limite chaque document à 1 Mo (1 048 576 octets), et l'encodage
@@ -1934,7 +2147,7 @@ function addPdfs(filesList) {
       const base64Data = e.target.result;
       const today = new Date().toLocaleDateString('fr-FR');
 
-      db.collection('files').add({
+      const newDoc = {
         name: file.name,
         path: pathKey,
         size: (file.size / (1024 * 1024)).toFixed(2) + " Mo",
@@ -1944,7 +2157,10 @@ function addPdfs(filesList) {
         ts: Date.now(),
         order: nextOrder++,
         content: base64Data
-      }).then(() => {
+      };
+      if (chapterToAssign) newDoc.chapter = chapterToAssign;
+
+      db.collection('files').add(newDoc).then(() => {
         showToast("Fichier ajouté !");
         loadFiles();
       }).catch(err => {
