@@ -213,6 +213,15 @@
   .top-item.user-row { flex-direction:column; align-items:flex-start; gap:2px; cursor:default; }
   .top-item.user-row .row-top { display:flex; justify-content:space-between; width:100%; gap:8px; }
   .top-item.user-row .row-loc { font-size:11px; color:var(--gris); }
+  .top-item.user-row .row-actions { display:flex; gap:6px; margin-top:4px; flex-wrap:wrap; }
+  .user-blocked-tag { background:#fee2e2; color:#dc2626; font-weight:800; font-size:10.5px; padding:1px 7px; border-radius:20px; }
+  .btn-user-action { border:none; border-radius:6px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer; }
+  .btn-user-delete { background:#fee2e2; color:#dc2626; }
+  .btn-user-delete:hover { background:#dc2626; color:#fff; }
+  .btn-user-block { background:#fef3c7; color:#b45309; }
+  .btn-user-block:hover { background:#b45309; color:#fff; }
+  .btn-user-unblock { background:#dcfce7; color:#16a34a; }
+  .btn-user-unblock:hover { background:#16a34a; color:#fff; }
   #stUsersDetails { margin:16px 0 8px; }
   #stUsersDetails summary {
     color:var(--gris); font-size:12.5px; letter-spacing:1px; text-transform:uppercase; font-weight:700;
@@ -826,6 +835,21 @@ const I18N = {
   errUnknown:     { fr:'erreur inconnue', en:'unknown error' },
   errSeeConsole:  { fr:'voir la console (F12)', en:'see console (F12)' },
   groupPromptQ:   { fr:'À quel groupe appartient cet étudiant ?\n1 = Prépa (Tunisie)\n2 = Saoudiens', en:'Which group does this student belong to?\n1 = Prepa (Tunisia)\n2 = Saudi' },
+
+  /* --- Gestion des inscrits (admin) : suppression / blocage --- */
+  btnDeleteUser:   { fr:'🗑 Supprimer', en:'🗑 Delete' },
+  btnBlockUser:    { fr:'🚫 Bloquer', en:'🚫 Block' },
+  btnUnblockUser:  { fr:'✅ Débloquer', en:'✅ Unblock' },
+  tagBlocked:      { fr:'🚫 Bloqué', en:'🚫 Blocked' },
+  confirmDeleteUser:{ fr:"Supprimer définitivement cet utilisateur ? Cette action est irréversible.", en:'Permanently delete this user? This action cannot be undone.' },
+  confirmBlockUser:{ fr:'Bloquer cet utilisateur ? Il ne pourra plus se connecter.', en:'Block this user? They will no longer be able to log in.' },
+  confirmUnblockUser:{ fr:'Débloquer cet utilisateur ?', en:'Unblock this user?' },
+  toastUserDeleted:{ fr:'Utilisateur supprimé', en:'User deleted' },
+  toastUserBlocked:{ fr:'Utilisateur bloqué', en:'User blocked' },
+  toastUserUnblocked:{ fr:'Utilisateur débloqué', en:'User unblocked' },
+  errBlocked:      { fr:"Votre compte a été bloqué par l'administrateur. Contactez-le pour plus d'informations.", en:'Your account has been blocked by the administrator. Contact them for more information.' },
+  errDeleteFail:   { fr:'Échec de la suppression', en:'Failed to delete' },
+  errBlockFail:    { fr:"Échec de l'opération", en:'Operation failed' },
 };
 
 /* ================= Structure des Matières (Sidebar) avec Permissions ================= */
@@ -1003,7 +1027,30 @@ function switchTab(t) {
 function checkSession() {
   const saved = localStorage.getItem('cc_user_session');
   if(saved) {
-    loginAs(JSON.parse(saved));
+    const u = JSON.parse(saved);
+    // ✅ Re-vérifier auprès de Firestore qu'un compte non-admin n'a pas été
+    // bloqué ou supprimé depuis la dernière visite, avant de rouvrir la session.
+    if (u.role !== 'admin') {
+      db.collection('users').doc(u.username).get().then(doc => {
+        if (!doc.exists) {
+          localStorage.removeItem('cc_user_session');
+          document.getElementById('authScreen').style.display = 'flex';
+          document.getElementById('appScreen').style.display = 'none';
+          return;
+        }
+        if (doc.data().blocked) {
+          localStorage.removeItem('cc_user_session');
+          document.getElementById('authScreen').style.display = 'flex';
+          document.getElementById('appScreen').style.display = 'none';
+          const msg = document.getElementById('authMsg');
+          if (msg) showMsg(msg, I18N.errBlocked[lang], true);
+          return;
+        }
+        loginAs(u);
+      }).catch(() => loginAs(u));
+    } else {
+      loginAs(u);
+    }
   } else {
     document.getElementById('authScreen').style.display = 'flex';
     document.getElementById('appScreen').style.display = 'none';
@@ -1094,6 +1141,7 @@ function doLogin() {
 }
 
 function verifyPassword(user, pass, msgEl) {
+  if (user.blocked) { showMsg(msgEl, I18N.errBlocked[lang], true); return; }
   if(user.password === pass) {
     logConnection(user);
     // S'assurer que tous les champs sont inclus
@@ -1202,6 +1250,11 @@ function googleLogin() {
         provider: 'google',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
+      if (doc.exists && userObj.blocked) {
+        firebase.auth().signOut().catch(() => {});
+        showMsg(msg, I18N.errBlocked[lang], true);
+        return;
+      }
       const go = () => { logConnection(userObj); loginAs(userObj); };
       if (doc.exists) go(); else db.collection('users').doc(uname).set(userObj).then(go);
     });
@@ -1261,53 +1314,151 @@ function renderUsersList(snap) {
     const row = document.createElement('div');
     row.className = 'top-item user-row';
     row.title = u.email || '';
-    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+    const blockedTag = u.blocked ? `<span class="user-blocked-tag">${I18N.tagBlocked[lang]}</span>` : '';
+    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+
+    /* --- Actions admin : bloquer / débloquer / supprimer --- */
+    if (currentUser && currentUser.role === 'admin') {
+      const actions = document.createElement('div');
+      actions.className = 'row-actions';
+
+      const blockBtn = document.createElement('button');
+      blockBtn.className = 'btn-user-action ' + (u.blocked ? 'btn-user-unblock' : 'btn-user-block');
+      blockBtn.textContent = u.blocked ? I18N.btnUnblockUser[lang] : I18N.btnBlockUser[lang];
+      blockBtn.onclick = (e) => { e.stopPropagation(); adminToggleBlockUser(doc.id, !!u.blocked); };
+      actions.appendChild(blockBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-user-action btn-user-delete';
+      delBtn.textContent = I18N.btnDeleteUser[lang];
+      delBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(doc.id); };
+      actions.appendChild(delBtn);
+
+      row.appendChild(actions);
+    }
+
     ul.appendChild(row);
   });
   if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
+}
+
+/* ================= Gestion des inscrits (admin) : suppression / blocage ================= */
+function adminDeleteUser(username) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (!confirm(I18N.confirmDeleteUser[lang])) return;
+  db.collection('users').doc(username).delete().then(() => {
+    db.collection('presence').doc(username).delete().catch(() => {});
+    showToast(I18N.toastUserDeleted[lang]);
+  }).catch(err => {
+    console.error('Échec de la suppression de l\'utilisateur :', err);
+    alert(`${I18N.errDeleteFail[lang]} : ${err.message || err}`);
+  });
+}
+
+function adminToggleBlockUser(username, isCurrentlyBlocked) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const confirmMsg = isCurrentlyBlocked ? I18N.confirmUnblockUser[lang] : I18N.confirmBlockUser[lang];
+  if (!confirm(confirmMsg)) return;
+  db.collection('users').doc(username).update({ blocked: !isCurrentlyBlocked }).then(() => {
+    showToast(isCurrentlyBlocked ? I18N.toastUserUnblocked[lang] : I18N.toastUserBlocked[lang]);
+    // Si l'utilisateur bloqué est actuellement en ligne, on force sa présence hors-ligne
+    if (!isCurrentlyBlocked) db.collection('presence').doc(username).set({ online: false }, { merge: true }).catch(() => {});
+  }).catch(err => {
+    console.error('Échec du blocage/déblocage :', err);
+    alert(`${I18N.errBlockFail[lang]} : ${err.message || err}`);
+  });
 }
 
 function startRealtimeListeners() {
   if (window._rtStarted) return;
   window._rtStarted = true;
 
+  const isAdmin = currentUser && currentUser.role === 'admin';
+
   // 1. Écoute des inscrits totaux
-  db.collection('users').onSnapshot(snap => {
-    window._lastUsersSnap = snap;
-    document.getElementById('totalUsers').innerText = snap.size;
-    document.getElementById('stReg').innerText = snap.size;
-    renderUsersList(snap);
-  }, err => {
-    // ✅ Si les règles Firestore bloquent la lecture (permission-denied), on le voit ici au lieu d'un "0" silencieux
-    console.error('Lecture de la collection "users" impossible :', err);
-    document.getElementById('totalUsers').innerText = '?';
-    document.getElementById('stReg').innerText = '?';
-  });
+  if (isAdmin) {
+    // ✅ Seul l'admin reçoit les documents complets (noms, emails, régions…)
+    db.collection('users').onSnapshot(snap => {
+      window._lastUsersSnap = snap;
+      document.getElementById('totalUsers').innerText = snap.size;
+      document.getElementById('stReg').innerText = snap.size;
+      renderUsersList(snap);
+    }, err => {
+      console.error('Lecture de la collection "users" impossible :', err);
+      document.getElementById('totalUsers').innerText = '?';
+      document.getElementById('stReg').innerText = '?';
+    });
+  } else {
+    // ✅ Les autres comptes ne reçoivent qu'un NOMBRE agrégé (count()) :
+    // aucun nom, email ou identifiant ne transite vers leur navigateur.
+    db.collection('users').count().get().then(snap => {
+      document.getElementById('totalUsers').innerText = snap.data().count;
+    }).catch(err => {
+      console.error('Comptage des inscrits impossible :', err);
+      document.getElementById('totalUsers').innerText = '?';
+    });
+  }
 
   // 2. Présence en direct (seuls les signaux de moins de 3 minutes comptent)
-  db.collection('presence').where('online', '==', true).onSnapshot(snap => {
-    const now = Date.now();
-    const actifs = [];
-    snap.forEach(doc => {
-      const p = doc.data();
-      const tms = (p.lastActive && p.lastActive.toMillis) ? p.lastActive.toMillis() : now;
-      if (now - tms < 180000) actifs.push(p);
+  if (isAdmin) {
+    // ✅ Liste nominative des connectés + boutons de gestion : admin uniquement
+    db.collection('presence').where('online', '==', true).onSnapshot(snap => {
+      const now = Date.now();
+      const actifs = [];
+      snap.forEach(doc => {
+        const p = doc.data();
+        const tms = (p.lastActive && p.lastActive.toMillis) ? p.lastActive.toMillis() : now;
+        if (now - tms < 180000) actifs.push(p);
+      });
+      document.getElementById('onlineNow').innerText = Math.max(actifs.length, 1);
+      document.getElementById('stOnline').innerText = Math.max(actifs.length, 1);
+      const whoEl = document.getElementById('stWho');
+      whoEl.innerHTML = '';
+      actifs.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'top-item user-row';
+        const isAdminRow = p.username === 'chokri';
+        row.innerHTML = `<div class="row-top"><span>👤 ${p.name}</span><span class="tn">actif</span></div>`;
+        if (!isAdminRow) {
+          const actions = document.createElement('div');
+          actions.className = 'row-actions';
+
+          const blockBtn = document.createElement('button');
+          blockBtn.className = 'btn-user-action btn-user-block';
+          blockBtn.textContent = I18N.btnBlockUser[lang];
+          blockBtn.onclick = (e) => { e.stopPropagation(); adminToggleBlockUser(p.username, false); };
+          actions.appendChild(blockBtn);
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn-user-action btn-user-delete';
+          delBtn.textContent = I18N.btnDeleteUser[lang];
+          delBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(p.username); };
+          actions.appendChild(delBtn);
+
+          row.appendChild(actions);
+        }
+        whoEl.appendChild(row);
+      });
     });
-    document.getElementById('onlineNow').innerText = Math.max(actifs.length, 1);
-    document.getElementById('stOnline').innerText = Math.max(actifs.length, 1);
-    const whoEl = document.getElementById('stWho');
-    whoEl.innerHTML = '';
-    actifs.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'top-item';
-      row.innerHTML = `<span>👤 ${p.name}</span><span class="tn">actif</span>`;
-      whoEl.appendChild(row);
-    });
-  });
+  } else {
+    // ✅ Les autres comptes ne reçoivent qu'un NOMBRE agrégé, jamais les noms.
+    // (nécessite un index composite Firestore online + lastActive : voir note ci-dessous)
+    function refreshPublicOnlineCount() {
+      const cutoff = firebase.firestore.Timestamp.fromMillis(Date.now() - 180000);
+      db.collection('presence').where('online', '==', true).where('lastActive', '>=', cutoff)
+        .count().get().then(snap => {
+          document.getElementById('onlineNow').innerText = Math.max(snap.data().count, 1);
+        }).catch(err => {
+          console.error('Comptage des connectés impossible (index Firestore manquant ?) :', err);
+        });
+    }
+    refreshPublicOnlineCount();
+    setInterval(refreshPublicOnlineCount, 60000);
+  }
 
 
-  // 2ter.bis Utilisateurs connectés par région/ville
-  db.collection('presence').where('online', '==', true).onSnapshot(snap => {
+  // 2ter.bis Utilisateurs connectés par région/ville (admin uniquement : contient des données de présence individuelles)
+  if (isAdmin) db.collection('presence').where('online', '==', true).onSnapshot(snap => {
     const regionEl = document.getElementById('stByRegion');
     if (!regionEl) return;
     const now = Date.now();
@@ -1350,8 +1501,8 @@ function startRealtimeListeners() {
   setInterval(() => { if (currentUser) setUserPresence(currentUser.username, true); }, 45000);
   window.addEventListener('beforeunload', () => { if (currentUser) setUserPresence(currentUser.username, false); });
 
-  // 2ter. Connexions par jour
-  db.collection('connlog').orderBy('ts', 'desc').limit(400).onSnapshot(snap => {
+  // 2ter. Connexions par jour (admin uniquement : journal nominatif des connexions)
+  if (isAdmin) db.collection('connlog').orderBy('ts', 'desc').limit(400).onSnapshot(snap => {
     const el = document.getElementById('stByDay');
     if (!el) return;
     const byDay = {};
@@ -1381,8 +1532,8 @@ function startRealtimeListeners() {
     }
   });
 
-  // Comptage des étudiants inscrits par ville
-  db.collection('users').onSnapshot(snap => {
+  // Comptage des étudiants inscrits par ville (admin uniquement : liste nominative sous-jacente)
+  if (isAdmin) db.collection('users').onSnapshot(snap => {
     const cityEl = document.getElementById('stStudentsByCity');
     if (!cityEl) return;
     const byCity = {};
