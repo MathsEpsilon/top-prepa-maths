@@ -1128,15 +1128,24 @@ function doLogin() {
     return;
   }
 
-  db.collection('users').where('searchKey', '==', userOrEmail).get().then(snap => {
-    if(snap.empty) {
-      db.collection('users').where('email', '==', userOrEmail).get().then(snap2 => {
-        if(snap2.empty) { showMsg(msg, I18N.errUserNotFound[lang], true); }
-        else { verifyPassword(snap2.docs[0].data(), pass, msg); }
-      });
-    } else {
-      verifyPassword(snap.docs[0].data(), pass, msg);
-    }
+  /* ✅ Recherche ciblée par identifiant (lecture d'un seul document, jamais
+     une recherche sur toute la collection). Pour un email, on passe d'abord
+     par « emailIndex » (une simple table de correspondance email → identifiant,
+     sans nom ni donnée personnelle) afin de retrouver le document exact.
+     Cela permet aux règles Firestore d'interdire la LISTE complète des
+     inscrits à tout le monde sauf l'administrateur, sans empêcher la
+     connexion normale. */
+  const isEmailLogin = userOrEmail.includes('@');
+  const findUserDoc = isEmailLogin
+    ? db.collection('emailIndex').doc(userOrEmail).get().then(idx => {
+        if (!idx.exists) return null;
+        return db.collection('users').doc(idx.data().username).get();
+      })
+    : db.collection('users').doc(userOrEmail).get();
+
+  findUserDoc.then(doc => {
+    if (!doc || !doc.exists) { showMsg(msg, I18N.errUserNotFound[lang], true); return; }
+    verifyPassword(doc.data(), pass, msg);
   }).catch(() => showMsg(msg, I18N.errLoginConn[lang], true));
 }
 
@@ -1144,6 +1153,11 @@ function verifyPassword(user, pass, msgEl) {
   if (user.blocked) { showMsg(msgEl, I18N.errBlocked[lang], true); return; }
   if(user.password === pass) {
     logConnection(user);
+    // ✅ Auto-réparation : garantit que emailIndex existe pour les comptes
+    // créés avant cette mise à jour, sans action requise de l'étudiant.
+    if (user.email && user.username) {
+      db.collection('emailIndex').doc(user.email.toLowerCase()).set({ username: user.username }, { merge: true }).catch(() => {});
+    }
     // S'assurer que tous les champs sont inclus
     const fullUser = {
       name: user.name,
@@ -1215,7 +1229,12 @@ function doSignup() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    db.collection('users').doc(user).set(newUser).then(() => {
+    // ✅ Écriture groupée : le compte ET son entrée dans l'index email
+    // (email → identifiant, sans donnée personnelle) sont créés ensemble.
+    const batch = db.batch();
+    batch.set(db.collection('users').doc(user), newUser);
+    batch.set(db.collection('emailIndex').doc(email), { username: user });
+    batch.commit().then(() => {
       document.getElementById('genPass').innerText = generatedPassword;
       document.getElementById('signupForm').style.display = 'none';
       document.getElementById('socialLogin').style.display = 'none';
@@ -1256,7 +1275,14 @@ function googleLogin() {
         return;
       }
       const go = () => { logConnection(userObj); loginAs(userObj); };
-      if (doc.exists) go(); else db.collection('users').doc(uname).set(userObj).then(go);
+      if (doc.exists) {
+        go();
+      } else {
+        const batch = db.batch();
+        batch.set(db.collection('users').doc(uname), userObj);
+        if (userObj.email) batch.set(db.collection('emailIndex').doc(userObj.email.toLowerCase()), { username: uname });
+        batch.commit().then(go);
+      }
     });
   }).catch(err => {
     if (err && (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found')) {
