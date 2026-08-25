@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=1280, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1229,11 +1229,13 @@ function doSignup() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    // ✅ Écriture groupée : le compte ET son entrée dans l'index email
-    // (email → identifiant, sans donnée personnelle) sont créés ensemble.
+    // ✅ Écriture groupée : le compte, son entrée dans l'index email
+    // (email → identifiant, sans donnée personnelle), et le compteur public
+    // (juste un nombre, jamais de nom) sont mis à jour ensemble.
     const batch = db.batch();
     batch.set(db.collection('users').doc(user), newUser);
     batch.set(db.collection('emailIndex').doc(email), { username: user });
+    batch.set(db.collection('stats').doc('public'), { totalUsers: firebase.firestore.FieldValue.increment(1) }, { merge: true });
     batch.commit().then(() => {
       document.getElementById('genPass').innerText = generatedPassword;
       document.getElementById('signupForm').style.display = 'none';
@@ -1281,6 +1283,7 @@ function googleLogin() {
         const batch = db.batch();
         batch.set(db.collection('users').doc(uname), userObj);
         if (userObj.email) batch.set(db.collection('emailIndex').doc(userObj.email.toLowerCase()), { username: uname });
+        batch.set(db.collection('stats').doc('public'), { totalUsers: firebase.firestore.FieldValue.increment(1) }, { merge: true });
         batch.commit().then(go);
       }
     });
@@ -1374,6 +1377,7 @@ function adminDeleteUser(username) {
   if (!confirm(I18N.confirmDeleteUser[lang])) return;
   db.collection('users').doc(username).delete().then(() => {
     db.collection('presence').doc(username).delete().catch(() => {});
+    db.collection('stats').doc('public').set({ totalUsers: firebase.firestore.FieldValue.increment(-1) }, { merge: true }).catch(() => {});
     showToast(I18N.toastUserDeleted[lang]);
   }).catch(err => {
     console.error('Échec de la suppression de l\'utilisateur :', err);
@@ -1409,17 +1413,21 @@ function startRealtimeListeners() {
       document.getElementById('totalUsers').innerText = snap.size;
       document.getElementById('stReg').innerText = snap.size;
       renderUsersList(snap);
+      // ✅ Synchronise le compteur public avec le nombre réel (utile une
+      // seule fois pour rattraper les comptes déjà inscrits avant ce système).
+      db.collection('stats').doc('public').set({ totalUsers: snap.size }, { merge: true }).catch(() => {});
     }, err => {
       console.error('Lecture de la collection "users" impossible :', err);
       document.getElementById('totalUsers').innerText = '?';
       document.getElementById('stReg').innerText = '?';
     });
   } else {
-    // ✅ Les autres comptes ne reçoivent qu'un NOMBRE agrégé (count()) :
-    // aucun nom, email ou identifiant ne transite vers leur navigateur.
-    db.collection('users').count().get().then(snap => {
-      document.getElementById('totalUsers').innerText = snap.data().count;
-    }).catch(err => {
+    // ✅ Compteur public : lecture d'un simple document agrégé (stats/public),
+    // jamais une liste des comptes. Aucun nom ne transite vers le navigateur.
+    db.collection('stats').doc('public').onSnapshot(snap => {
+      const n = snap.exists ? (snap.data().totalUsers || 0) : 0;
+      document.getElementById('totalUsers').innerText = n;
+    }, err => {
       console.error('Comptage des inscrits impossible :', err);
       document.getElementById('totalUsers').innerText = '?';
     });
@@ -1468,14 +1476,15 @@ function startRealtimeListeners() {
     });
   } else {
     // ✅ Les autres comptes ne reçoivent qu'un NOMBRE agrégé, jamais les noms.
-    // (nécessite un index composite Firestore online + lastActive : voir note ci-dessous)
+    // Requête simple (un seul champ "online") : aucun index Firestore
+    // supplémentaire à créer manuellement.
     function refreshPublicOnlineCount() {
-      const cutoff = firebase.firestore.Timestamp.fromMillis(Date.now() - 180000);
-      db.collection('presence').where('online', '==', true).where('lastActive', '>=', cutoff)
+      db.collection('presence').where('online', '==', true)
         .count().get().then(snap => {
           document.getElementById('onlineNow').innerText = Math.max(snap.data().count, 1);
         }).catch(err => {
-          console.error('Comptage des connectés impossible (index Firestore manquant ?) :', err);
+          console.error('Comptage des connectés impossible :', err);
+          document.getElementById('onlineNow').innerText = '?';
         });
     }
     refreshPublicOnlineCount();
