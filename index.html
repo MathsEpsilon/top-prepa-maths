@@ -684,6 +684,7 @@
       <div class="stat-card"><span data-i18n="statDl">⬇ Téléchargements</span><b id="stDl">0</b></div>
       <details id="stUsersDetails">
         <summary><span data-i18n="statUsersList">👥 Liste des inscrits</span> (<span id="stUsersCount">0</span>)</summary>
+        <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="exportUsersCSV()" data-i18n="btnExportUsers">⬇ Exporter la liste (CSV)</button>
         <div id="stUsers"></div>
       </details>
       <h4>🏆 Top téléchargements</h4>
@@ -805,6 +806,7 @@ const I18N = {
   srchNone:  { fr:'Aucun document trouvé', en:'No document found' },
   notSpecified: { fr:'Non spécifiée', en:'Not specified' },
   statUsersList: { fr:'👥 Liste des inscrits', en:'👥 Registered users list' },
+  btnExportUsers: { fr:'⬇ Exporter la liste (CSV)', en:'⬇ Export list (CSV)' },
   dupClean:  { fr:'🧹 Supprimer les doublons', en:'🧹 Remove duplicates' },
   chapAll:      { fr:'📚 Tous', en:'📚 All' },
   chapNone:     { fr:'📄 Sans chapitre', en:'📄 No chapter' },
@@ -1371,6 +1373,51 @@ function renderUsersList(snap) {
   if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
 }
 
+/* ================= Export CSV de la liste des inscrits (admin) ================= */
+function exportUsersCSV() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const snap = window._lastUsersSnap;
+  if (!snap || !snap.size) { alert(lang === 'en' ? 'No registered students yet, or list still loading.' : "Aucun étudiant inscrit pour l'instant, ou liste encore en cours de chargement."); return; }
+
+  const escCsv = (v) => {
+    const s = (v === undefined || v === null) ? '' : String(v);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const headers = ['Nom', 'Identifiant', 'Email', 'Région', 'Ville', 'Groupe', 'Bloqué'];
+  const rows = [headers.join(';')];
+
+  snap.docs
+    .slice()
+    .sort((a, b) => String(a.data().name || '').localeCompare(String(b.data().name || '')))
+    .forEach(doc => {
+      const u = doc.data();
+      rows.push([
+        escCsv(u.name),
+        escCsv(doc.id),
+        escCsv(u.email),
+        escCsv(u.region),
+        escCsv(u.city),
+        escCsv(u.group === 'saudi' ? 'Saoudien(ne)' : 'Préparatoire'),
+        escCsv(u.blocked ? 'Oui' : 'Non')
+      ].join(';'));
+    });
+
+  // BOM UTF-8 pour un affichage correct des accents dans Excel
+  const csvContent = '\uFEFF' + rows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+  a.href = url;
+  a.download = `Inscrits-excellence-academique-${dateStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(lang === 'en' ? 'List exported.' : 'Liste exportée !');
+}
+
 /* ================= Gestion des inscrits (admin) : suppression / blocage ================= */
 function adminDeleteUser(username) {
   if (!currentUser || currentUser.role !== 'admin') return;
@@ -1408,19 +1455,41 @@ function startRealtimeListeners() {
   // 1. Écoute des inscrits totaux
   if (isAdmin) {
     // ✅ Seul l'admin reçoit les documents complets (noms, emails, régions…)
-    db.collection('users').onSnapshot(snap => {
-      window._lastUsersSnap = snap;
-      document.getElementById('totalUsers').innerText = snap.size;
-      document.getElementById('stReg').innerText = snap.size;
-      renderUsersList(snap);
-      // ✅ Synchronise le compteur public avec le nombre réel (utile une
-      // seule fois pour rattraper les comptes déjà inscrits avant ce système).
-      db.collection('stats').doc('public').set({ totalUsers: snap.size }, { merge: true }).catch(() => {});
-    }, err => {
-      console.error('Lecture de la collection "users" impossible :', err);
-      document.getElementById('totalUsers').innerText = '?';
-      document.getElementById('stReg').innerText = '?';
-    });
+    // ⚠️ CORRECTIF « compteur bloqué sur ? » : après un rechargement de page,
+    // la session admin est restaurée instantanément depuis localStorage
+    // (cc_user_session), mais la ré-authentification réelle auprès de
+    // Firebase Auth est asynchrone et prend un court instant. Si on interroge
+    // la collection "users" avant que Firebase Auth n'ait confirmé
+    // request.auth.token.email, la règle isAdmin() refuse la requête
+    // (permission-denied) et le compteur reste figé sur "?" pour toute la
+    // session (un onSnapshot en erreur ne se relance pas tout seul).
+    // On attend donc la confirmation réelle de Firebase Auth avant d'écouter.
+    const attachAdminUsersListener = () => {
+      db.collection('users').onSnapshot(snap => {
+        window._lastUsersSnap = snap;
+        document.getElementById('totalUsers').innerText = snap.size;
+        document.getElementById('stReg').innerText = snap.size;
+        renderUsersList(snap);
+        // ✅ Synchronise le compteur public avec le nombre réel (utile une
+        // seule fois pour rattraper les comptes déjà inscrits avant ce système).
+        db.collection('stats').doc('public').set({ totalUsers: snap.size }, { merge: true }).catch(() => {});
+      }, err => {
+        console.error('Lecture de la collection "users" impossible :', err);
+        document.getElementById('totalUsers').innerText = '?';
+        document.getElementById('stReg').innerText = '?';
+      });
+    };
+    if (firebase.auth().currentUser) {
+      attachAdminUsersListener();
+    } else {
+      const unsubAuth = firebase.auth().onAuthStateChanged(fbUser => {
+        if (fbUser) { unsubAuth(); attachAdminUsersListener(); }
+      });
+      // Filet de sécurité : si après 5 s Firebase Auth n'a toujours rien
+      // confirmé (ex. session admin réellement expirée), on tente quand
+      // même une fois pour au moins afficher une erreur exploitable.
+      setTimeout(() => { if (!window._lastUsersSnap) attachAdminUsersListener(); }, 5000);
+    }
   } else {
     // ✅ Compteur public : lecture d'un simple document agrégé (stats/public),
     // jamais une liste des comptes. Aucun nom ne transite vers le navigateur.
