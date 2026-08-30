@@ -1143,22 +1143,31 @@ function doLogin() {
   if(!userOrEmail || !pass) { showMsg(msg, I18N.errRequired[lang], true); return; }
 
   /* ---- Compte administrateur : vérifié via Firebase Authentication            ---- */
-  /* ✅ Plus de mot de passe en clair dans le code : la vérification se fait      */
-  /* côté serveur Firebase, ce qui permet aux règles Firestore de vraiment       */
-  /* bloquer l'ajout/la modification/la suppression pour tout le monde sauf lui. */
-  if (userOrEmail === 'chokri' || userOrEmail === 'chokri.chniti@gmail.com') {
-    firebase.auth().signInWithEmailAndPassword('chokri.chniti@gmail.com', pass)
+  /* ✅ Aucune adresse email ni nom réel écrits en clair dans ce fichier — ce      */
+  /* fichier est envoyé tel quel à tous les visiteurs du site (visible via        */
+  /* "Afficher le code source"). Si ce qui est tapé contient un "@", on tente     */
+  /* d'abord une connexion Firebase Auth (réservée à l'admin) ; si ça échoue,     */
+  /* on continue normalement vers la connexion étudiant par email, sans jamais   */
+  /* avoir eu besoin d'écrire l'adresse admin en dur ici.                        */
+  const isEmailLogin = userOrEmail.includes('@');
+  if (isEmailLogin) {
+    firebase.auth().signInWithEmailAndPassword(userOrEmail, pass)
       .then(() => {
-        logConnection({ username:'chokri', name:'Chokri' });
-        loginAs({ name:'Chokri', username:'chokri', searchKey:'chokri', email:'chokri.chniti@gmail.com', region:'Tunisie', city:'Nabeul', role:'admin' });
+        const uname = userOrEmail.split('@')[0];
+        logConnection({ username: uname, name: 'Admin' });
+        loginAs({ name: 'Admin', username: uname, searchKey: uname, email: userOrEmail, region: 'Tunisie', city: '', role: 'admin' });
       })
-      .catch(err => {
-        console.error('Erreur de connexion admin Firebase :', err.code, err.message);
-        showMsg(msg, `${I18N.errFailed[lang]} (${err.code || I18N.errUnknown[lang]}) : ${err.message || I18N.errSeeConsole[lang]}`, true);
+      .catch(() => {
+        // Pas le compte admin (ou mauvais mot de passe) : on essaie la
+        // connexion étudiant classique par email avant d'afficher une erreur.
+        continueAsStudentLogin(userOrEmail, pass, msg, true);
       });
     return;
   }
+  continueAsStudentLogin(userOrEmail, pass, msg, false);
+}
 
+function continueAsStudentLogin(userOrEmail, pass, msg, isEmailLogin) {
   /* ✅ Recherche ciblée par identifiant (lecture d'un seul document, jamais
      une recherche sur toute la collection). Pour un email, on passe d'abord
      par « emailIndex » (une simple table de correspondance email → identifiant,
@@ -1166,7 +1175,6 @@ function doLogin() {
      Cela permet aux règles Firestore d'interdire la LISTE complète des
      inscrits à tout le monde sauf l'administrateur, sans empêcher la
      connexion normale. */
-  const isEmailLogin = userOrEmail.includes('@');
   const findUserDoc = isEmailLogin
     ? db.collection('emailIndex').doc(userOrEmail).get().then(idx => {
         if (!idx.exists) return null;
@@ -1340,6 +1348,7 @@ function setUserPresence(username, isOnline) {
   db.collection('presence').doc(username).set({
     username: username,
     name: currentUser.name,
+    role: currentUser.role || 'student',
     region: currentUser.region || '',
     city: currentUser.city || '',
     online: isOnline,
@@ -1550,7 +1559,7 @@ function startRealtimeListeners() {
       actifs.forEach(p => {
         const row = document.createElement('div');
         row.className = 'top-item user-row';
-        const isAdminRow = p.username === 'chokri';
+        const isAdminRow = p.role === 'admin';
         row.innerHTML = `<div class="row-top"><span>👤 ${p.name}</span><span class="tn">actif</span></div>`;
         if (!isAdminRow) {
           const actions = document.createElement('div');
