@@ -323,6 +323,22 @@
   .chip .chip-count { opacity:.75; white-space:nowrap; flex-shrink:0; }
   .chip .chip-x, .chip .chip-up, .chip .chip-dn, .chip .chip-ren, .chip .chip-addpdf { opacity:.75; font-weight:800; flex-shrink:0; }
   .chip .chip-x:hover, .chip .chip-up:hover, .chip .chip-dn:hover, .chip .chip-ren:hover, .chip .chip-addpdf:hover { opacity:1; }
+  .chip.locked { opacity:.65; cursor:not-allowed; }
+  .chip.locked .chip-count { color:#b45309; font-weight:600; }
+  .btn-sub { background:#f59e0b; color:#0f2a5c; border:none; border-radius:8px; padding:8px 14px; font-weight:700; cursor:pointer; margin-right:8px; }
+  .btn-sub:hover { background:#fbbf24; }
+  .sub-overlay { display:none; position:fixed; inset:0; background:rgba(15,42,92,.55); z-index:999; align-items:center; justify-content:center; }
+  .sub-overlay.show { display:flex; }
+  .sub-modal { background:#fff; border-radius:14px; padding:28px; max-width:420px; width:92%; position:relative; box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  .sub-modal h2 { margin:0 0 16px; color:#0f2a5c; }
+  .sub-close { position:absolute; top:14px; right:14px; border:none; background:none; font-size:18px; cursor:pointer; color:#64748b; }
+  .sub-status { padding:14px; border-radius:10px; margin-bottom:14px; font-size:14px; line-height:1.5; }
+  .sub-status.active { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .sub-status.inactive { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
+  .sub-price { font-size:28px; font-weight:800; color:#0f2a5c; margin:8px 0; }
+  .btn-subscribe { width:100%; background:#0f2a5c; color:#fff; border:none; border-radius:10px; padding:14px; font-size:15px; font-weight:700; cursor:pointer; }
+  .btn-subscribe:hover { background:#1e3a70; }
+  .btn-subscribe:disabled { opacity:.6; cursor:wait; }
   .chip .chip-addpdf { font-size:12px; font-weight:700; }
   .btn-chset { border:none; background:#f5f3ff; color:#7c3aed; width:28px; height:28px; border-radius:7px; cursor:pointer; font-weight:700; font-size:13px; }
   .btn-chset:hover { background:#7c3aed; color:#fff; }
@@ -577,6 +593,7 @@
       <small>👥 <span id="totalUsers">0</span> <span data-i18n="regTxt">étudiant(s) inscrit(s)</span></small>
     </div>
     <button class="btn-lang2" id="langBtn" onclick="toggleLang()">EN</button>
+    <button class="btn-sub" id="subBtn" onclick="openSubscriptionPanel()" style="display:none">🔓 Mon abonnement</button>
     <div class="user-chip">
       <div class="avatar" id="avatar"></div>
       <span id="userName"></span>
@@ -584,6 +601,14 @@
     </div>
     <button class="btn-logout" onclick="logout()" data-i18n="btnLogout">Déconnexion</button>
   </header>
+
+  <div class="sub-overlay" id="subOverlay" onclick="if(event.target===this) closeSubscriptionPanel()">
+    <div class="sub-modal">
+      <button class="sub-close" onclick="closeSubscriptionPanel()">✕</button>
+      <h2>Mon abonnement</h2>
+      <div id="subPanelBody"></div>
+    </div>
+  </div>
 
   <div class="layout">
     <aside class="nav" id="sidebar"></aside>
@@ -1074,11 +1099,15 @@ function loginAs(userObj) {
     document.getElementById('btnAdd').style.display = 'inline-block';
     document.getElementById('statsPanel').classList.add('show');
     document.getElementById('visioAdmin').style.display = 'block';
+    document.getElementById('subBtn').style.display = 'none';
   } else {
     document.getElementById('adminBadge').style.display = 'none';
     document.getElementById('btnAdd').style.display = 'none';
     document.getElementById('statsPanel').classList.remove('show');
     document.getElementById('visioAdmin').style.display = 'none';
+    // 🔕 Bouton "Mon abonnement" masqué pour l'instant : le paiement n'est
+    // pas encore branché. Remets `= 'inline-block'` une fois Konnect prêt.
+    document.getElementById('subBtn').style.display = 'none';
   }
 
   // Enclenchement de la présence temps réel et écoutes Firebase
@@ -1169,7 +1198,8 @@ function verifyPassword(user, pass, msgEl) {
       region: user.region || '',
       city: user.city || '',
       role: user.role,
-      group: user.group
+      group: user.group,
+      subscription: user.subscription || null
     };
     loginAs(fullUser);
   } else {
@@ -1968,8 +1998,13 @@ function previewPdf(id, name) {
     document.getElementById('splitWrap').classList.add('split');
     document.querySelector('.files-wrap').classList.add('wide');
     document.querySelectorAll('#fileList .file-row').forEach(r => r.classList.toggle('sel-row', r.dataset.id === id));
-    // Compteur de consultations
     db.collection('files').doc(id).update({ views: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
+  }).catch(err => {
+    if (err.code === 'permission-denied') {
+      showToast("🔒 Ce chapitre n'est pas encore débloqué par l'admin.");
+    } else {
+      showToast("Erreur, réessaie.");
+    }
   });
 }
 function closePreview() {
@@ -2160,16 +2195,27 @@ function renderAccordion() {
 
   bar.style.display = (chapters.length || currentUser.role === 'admin') ? 'flex' : 'none';
 
+  const isSubscribed = currentUser.role === 'admin' || (
+    currentUser.subscription &&
+    currentUser.subscription.status === 'active' &&
+    currentUser.subscription.endDate &&
+    (currentUser.subscription.endDate.toMillis ? currentUser.subscription.endDate.toMillis() : currentUser.subscription.endDate) > Date.now()
+  );
+
   chapters.forEach((c, idx) => {
     const chapterFiles = keptAll.filter(f => (f.chapter || null) === c.id);
     const isOpen = !!openChapters[c.id];
+    const isLocked = !isSubscribed && c.order !== 0 && !c.unlockedFree;
 
     const wrap = document.createElement('div');
     wrap.className = 'chapter-wrap';
 
     const chip = document.createElement('div');
-    chip.className = 'chip' + (isOpen ? ' open' : '');
-    chip.onclick = () => { openChapters[c.id] = !isOpen; renderAccordion(); };
+    chip.className = 'chip' + (isOpen ? ' open' : '') + (isLocked ? ' locked' : '');
+    chip.onclick = () => {
+      if (isLocked) { showToast("🔒 Chapitre pas encore débloqué — abonne-toi pour un accès immédiat."); return; }
+      openChapters[c.id] = !isOpen; renderAccordion();
+    };
 
     // ✅ Bouton ouvrir/fermer, deux couleurs distinctes selon l'état
     const toggle = document.createElement('span');
@@ -2180,11 +2226,28 @@ function renderAccordion() {
     chip.appendChild(toggle);
 
     const label = document.createElement('span'); label.className = 'chip-label';
-    const icon = document.createElement('span'); icon.textContent = '📁';
+    const icon = document.createElement('span'); icon.textContent = isLocked ? '🔒' : '📁';
     const nameSpan = document.createElement('span'); nameSpan.className = 'chip-name'; nameSpan.textContent = c.name;
-    const countSpan = document.createElement('span'); countSpan.className = 'chip-count'; countSpan.textContent = `(${chapterFiles.length})`;
+    const countSpan = document.createElement('span'); countSpan.className = 'chip-count'; countSpan.textContent = isLocked ? '(abonnement requis)' : `(${chapterFiles.length})`;
     label.appendChild(icon); label.appendChild(nameSpan); label.appendChild(countSpan);
     chip.appendChild(label);
+
+    if (currentUser.role === 'admin') {
+      const nextLockedOrder = chapters.filter(cc => cc.order !== 0 && !cc.unlockedFree).reduce((min, cc) => Math.min(min, cc.order), Infinity);
+      if (c.order === nextLockedOrder) {
+        const unlockBtn = document.createElement('span'); unlockBtn.className = 'chip-addpdf'; unlockBtn.textContent = '🔓 Débloquer';
+        unlockBtn.title = 'Rendre ce chapitre visible pour tous les étudiants inscrits';
+        unlockBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (!confirm(`Débloquer "${c.name}" pour tous les étudiants inscrits (non-abonnés inclus) ?`)) return;
+          db.collection('chapters').doc(c.id).update({ unlockedFree: true }).then(() => {
+            showToast('Chapitre débloqué pour tous les étudiants !');
+            loadFiles();
+          });
+        };
+        chip.appendChild(unlockBtn);
+      }
+    }
 
     if (currentUser.role === 'admin') {
       const ren = document.createElement('span'); ren.className = 'chip-ren'; ren.textContent = '✎'; ren.title = I18N.chapRenamePrompt[lang];
@@ -2247,7 +2310,7 @@ function renderAccordion() {
 
     wrap.appendChild(chip);
 
-    if (isOpen) {
+    if (isOpen && !isLocked) {
       const inner = document.createElement('div'); inner.className = 'chapter-files';
       if (!chapterFiles.length) {
         inner.innerHTML = `<div class="empty-mini">📭 ${I18N.emptyDocs[lang]}</div>`;
@@ -2385,11 +2448,11 @@ function addPdfs(filesList) {
   let nextOrder = scopeList.length;
 
   Array.from(filesList).forEach(file => {
-    // ⚠️ Firestore limite chaque document à 1 Mo (1 048 576 octets), et l'encodage
-    // en base64 augmente la taille du fichier d'environ 33 %. On limite donc le
-    // fichier source à ~700 Ko pour rester sous cette limite en toute sécurité.
+    // ⚠️ Firestore limite chaque document à 1 Mo, et l'encodage base64
+    // augmente la taille d'environ 33 %. On limite le fichier source à
+    // ~700 Ko pour rester en sécurité sous cette limite.
     if(file.size > 700 * 1024) {
-      alert(`Le fichier ${file.name} dépasse la limite autorisée de 700 Ko (limite technique de la base de données). Compressez-le ou divisez-le en plusieurs fichiers plus légers.`);
+      alert(`Le fichier ${file.name} dépasse la limite autorisée de 700 Ko (limite technique de la base de données gratuite). Compressez-le ou divisez-le en plusieurs fichiers plus légers.`);
       return;
     }
     // Empêcher les doublons (cause des fichiers affichés deux fois)
@@ -2419,7 +2482,6 @@ function addPdfs(filesList) {
         showToast("Fichier ajouté !");
         loadFiles();
       }).catch(err => {
-        // ✅ Ne plus échouer silencieusement : l'utilisateur voit désormais l'erreur réelle
         console.error('Échec de l\'ajout du fichier :', err);
         alert(`Échec de l'ajout de « ${file.name} » : ${err.message || err}`);
       });
@@ -2431,6 +2493,69 @@ function addPdfs(filesList) {
   });
   document.getElementById('pdfInput').value = '';
 }
+
+/* ================= Abonnement ================= */
+function openSubscriptionPanel() {
+  renderSubscriptionPanel();
+  document.getElementById('subOverlay').classList.add('show');
+}
+function closeSubscriptionPanel() {
+  document.getElementById('subOverlay').classList.remove('show');
+}
+function renderSubscriptionPanel() {
+  const body = document.getElementById('subPanelBody');
+  if (!body || !currentUser) return;
+  const sub = currentUser.subscription;
+  const isActive = sub && sub.status === 'active' && sub.endDate &&
+    (sub.endDate.toMillis ? sub.endDate.toMillis() : sub.endDate) > Date.now();
+
+  if (isActive) {
+    const endMs = sub.endDate.toMillis ? sub.endDate.toMillis() : sub.endDate;
+    const endStr = new Date(endMs).toLocaleDateString('fr-FR');
+    body.innerHTML = `
+      <div class="sub-status active">✅ Abonnement actif<br>Valable jusqu'au <b>${endStr}</b></div>
+      <p style="color:#64748b;font-size:14px">Tu as accès à tous les chapitres, y compris ceux pas encore débloqués pour les autres étudiants.</p>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="sub-status inactive">🔒 Sans abonnement, tu n'as accès qu'au chapitre 1 de chaque matière (et aux chapitres débloqués par l'admin).</div>
+      <div class="sub-price">${PRIX_ABONNEMENT_DT} DT <span style="font-size:14px;font-weight:400;color:#64748b">/ an</span></div>
+      <p style="color:#64748b;font-size:14px">Accès immédiat à tous les chapitres de toutes les matières, sans attendre.</p>
+      <button class="btn-subscribe" id="subscribeBtn" onclick="startSubscription()">Payer et m'abonner</button>
+    `;
+  }
+}
+function startSubscription() {
+  const btn = document.getElementById('subscribeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Redirection en cours…'; }
+  fetch(`${CF_BASE}/createPayment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: currentUser.username })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.payUrl) {
+        window.location.href = data.payUrl;
+      } else {
+        showToast('Erreur : ' + (data.error || 'paiement indisponible'));
+        if (btn) { btn.disabled = false; btn.textContent = "Payer et m'abonner"; }
+      }
+    })
+    .catch(() => {
+      showToast('Erreur réseau, réessaie.');
+      if (btn) { btn.disabled = false; btn.textContent = "Payer et m'abonner"; }
+    });
+}
+
+/* ================= Abonnement =================
+   ⏸️ Fonctionnalité mise en pause pour l'instant (pas de Cloud Functions,
+   pas de forfait Blaze). Le code reste ici, désactivé, prêt à être
+   réactivé plus tard : il suffit de redéfinir CF_BASE et
+   PRIX_ABONNEMENT_DT, de redéployer les Cloud Functions correspondantes,
+   et de remettre `document.getElementById('subBtn').style.display` sur
+   'inline-block' dans loginAs().
+================================================= */
 
 function downloadPdf(id, name) {
   db.collection('files').doc(id).get().then(doc => {
@@ -2444,10 +2569,15 @@ function downloadPdf(id, name) {
     link.click();
     document.body.removeChild(link);
 
-    // Incrémentation du compteur de téléchargements de façon atomique
     db.collection('files').doc(id).update({
       downloads: firebase.firestore.FieldValue.increment(1)
     }).catch(() => {});
+  }).catch(err => {
+    if (err.code === 'permission-denied') {
+      showToast("🔒 Ce chapitre n'est pas encore débloqué par l'admin.");
+    } else {
+      showToast("Erreur, réessaie.");
+    }
   });
 }
 
