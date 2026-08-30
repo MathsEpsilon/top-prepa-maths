@@ -6,10 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="L'excellence académique">
+<meta name="apple-mobile-web-app-title" content="Top Prepa Maths">
 <meta name="theme-color" content="#0f2a5c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230f2a5c'/><text x='32' y='45' font-size='38' text-anchor='middle' fill='%23f59e0b' font-family='Georgia'>Σ</text></svg>">
-<title>L'excellence académique</title>
+<title>Top Prepa Maths</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -480,7 +480,7 @@
   <div class="auth-card">
     <div class="auth-hero">
       <button class="lang-btn" id="langBtnAuth" onclick="toggleLang()">EN</button>
-      <h1 data-i18n="siteTitle">L'excellence académique</h1>
+      <h1 data-i18n="siteTitle">Top Prepa Maths</h1>
       <div class="sub-brand">C.C</div>
       <p data-i18n="tagline">Cours · Séries corrigées · TD · Devoirs corrigés</p>
       <div class="cat-marquee">
@@ -570,7 +570,7 @@
     <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
     <div class="brand">
       <div class="sigma">Σ</div>
-      <h1><span data-i18n="siteTitle">L'excellence académique</span><small id="brandSub">C.C</small></h1>
+      <h1><span data-i18n="siteTitle">Top Prepa Maths</span><small id="brandSub">C.C</small></h1>
     </div>
     <div class="presence">
       <span><span class="dot">●</span> <span id="onlineNow">1</span> <span data-i18n="onlineTxt">en ligne maintenant</span></span>
@@ -750,7 +750,7 @@ const db = firebase.firestore();
 /* ================= Langue (FR / EN) ================= */
 let lang = localStorage.getItem('rp_lang') || 'fr';
 const I18N = {
-  siteTitle: { fr:"L'excellence académique", en:'Academic Excellence' },
+  siteTitle: { fr:"Top Prepa Maths", en:'Top Prepa Maths' },
   tagline:   { fr:'Cours · Séries corrigées · TD · Devoirs corrigés', en:'Lectures · Solved exercises · Tutorials · Graded homework' },
   tabLogin:  { fr:'Connexion', en:'Sign in' },
   tabSignup: { fr:'Créer un compte', en:'Create account' },
@@ -1410,7 +1410,7 @@ function exportUsersCSV() {
   const a = document.createElement('a');
   const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
   a.href = url;
-  a.download = `Inscrits-excellence-academique-${dateStr}.csv`;
+  a.download = `Inscrits-top-prepa-maths-${dateStr}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2527,7 +2527,7 @@ function clearBoard() {
 
 function downloadBoard() {
   const link = document.createElement('a');
-  link.download = 'tableau-excellence.png';
+  link.download = 'tableau-top-prepa-maths.png';
   link.href = canvas.toDataURL();
   link.click();
 }
