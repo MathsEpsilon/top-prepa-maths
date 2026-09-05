@@ -540,6 +540,10 @@
         <div class="field"><label data-i18n="lblUser">Identifiant ou e-mail</label><input type="text" id="loginUser" placeholder="Votre identifiant ou e-mail" autocomplete="username"></div>
         <div class="field"><label data-i18n="lblPass">Mot de passe</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"></div>
         <button class="btn-main" onclick="doLogin()" data-i18n="btnLogin">Se connecter</button>
+        <!-- ✅ Lien mot de passe oublié -->
+        <div style="text-align:center; margin-top:12px;">
+          <a href="#" onclick="switchToForgotPassword()" style="color:#0ea5e9; font-size:14px; text-decoration:none; cursor:pointer;">🔑 Mot de passe oublié ?</a>
+        </div>
       </div>
       <div id="signupForm" style="display:none">
         <div class="field"><label data-i18n="lblName">Nom complet</label><input type="text" id="suName" placeholder="Prénom Nom" maxlength="50"></div>
@@ -567,6 +571,25 @@
         <div class="pw-box" id="genPass"></div>
         <p style="font-size:13px; color:var(--gris); margin-bottom:14px" data-i18n="confNote">Notez-le précieusement : il ne sera plus jamais affiché.</p>
         <button class="btn-main" onclick="afterConfirm()" data-i18n="confOk">J'ai noté → Me connecter</button>
+      </div>
+      <!-- ✅ Panel Mot de passe oublié -->
+      <div id="forgotPanel" style="display:none;">
+        <h3 style="margin-bottom:16px; color:#0f2a5c;">🔑 Récupérer mon mot de passe</h3>
+        <p style="font-size:14px; color:var(--gris); margin-bottom:12px;">Entrez votre identifiant ou email pour récupérer votre mot de passe.</p>
+        <div class="field">
+          <label>Identifiant ou Email</label>
+          <input type="text" id="forgotUser" placeholder="Votre identifiant ou email" style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px;">
+        </div>
+        <button class="btn-main" onclick="doForgotPassword()" style="margin-bottom:10px;">Récupérer mon mot de passe</button>
+        <button class="btn-main" onclick="switchToLogin()" style="background:#e2e8f0; color:#1e293b;">← Retour à la connexion</button>
+      </div>
+      <!-- ✅ Panel Mot de passe récupéré -->
+      <div id="recoveredPanel" style="display:none; text-align:center;">
+        <h3 style="color:#16a34a; margin-bottom:10px;">✅ Mot de passe récupéré !</h3>
+        <p style="font-size:14px; color:var(--gris);">Voici votre nouveau mot de passe :</p>
+        <div class="pw-box" id="recoveredPass"></div>
+        <p style="font-size:13px; color:var(--gris); margin-bottom:14px;">Notez-le précieusement.</p>
+        <button class="btn-main" onclick="switchToLogin()" style="margin-bottom:10px;">← Me connecter</button>
       </div>
       <div class="auth-msg" id="authMsg"></div>
     </div>
@@ -1309,6 +1332,77 @@ function doSignup() {
 
 function afterConfirm() {
   switchTab('login');
+}
+
+/* ✅ RÉCUPÉRATION DU MOT DE PASSE OUBLIÉ */
+function switchToForgotPassword() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('signupForm').style.display = 'none';
+  document.getElementById('confirmPanel').style.display = 'none';
+  document.getElementById('forgotPanel').style.display = 'block';
+  document.getElementById('recoveredPanel').style.display = 'none';
+  document.getElementById('forgotUser').value = '';
+  document.getElementById('authMsg').innerText = '';
+}
+
+function switchToLogin() {
+  switchTab('login');
+}
+
+function doForgotPassword() {
+  const userInput = document.getElementById('forgotUser').value.trim().toLowerCase();
+  const msg = document.getElementById('authMsg');
+  
+  if (!userInput) {
+    showMsg(msg, '❌ Veuillez entrer votre identifiant ou email', true);
+    return;
+  }
+  
+  // Chercher l'utilisateur par username
+  db.collection('users').doc(userInput).get().then(doc => {
+    if (doc.exists) {
+      const user = doc.data();
+      // Générer un nouveau mot de passe
+      const newPassword = 'cc' + Math.floor(1000 + Math.random() * 9000);
+      
+      // Mettre à jour le mot de passe
+      db.collection('users').doc(userInput).update({ password: newPassword })
+        .then(() => {
+          document.getElementById('recoveredPass').innerText = newPassword;
+          document.getElementById('forgotPanel').style.display = 'none';
+          document.getElementById('recoveredPanel').style.display = 'block';
+        })
+        .catch(err => showMsg(msg, '❌ Erreur : ' + err.message, true));
+      return;
+    }
+    
+    // Chercher par email
+    if (userInput.includes('@')) {
+      db.collection('emailIndex').doc(userInput).get().then(emailDoc => {
+        if (emailDoc.exists) {
+          const username = emailDoc.data().username;
+          const newPassword = 'cc' + Math.floor(1000 + Math.random() * 9000);
+          
+          db.collection('users').doc(username).update({ password: newPassword })
+            .then(() => {
+              document.getElementById('recoveredPass').innerText = newPassword;
+              document.getElementById('forgotPanel').style.display = 'none';
+              document.getElementById('recoveredPanel').style.display = 'block';
+            })
+            .catch(err => showMsg(msg, '❌ Erreur : ' + err.message, true));
+        } else {
+          showMsg(msg, '❌ Email non trouvé. Vérifiez votre adresse.', true);
+        }
+      }).catch(() => {
+        showMsg(msg, '❌ Utilisateur ou email non trouvé', true);
+      });
+    } else {
+      showMsg(msg, '❌ Identifiant non trouvé. Vérifiez votre saisie.', true);
+    }
+  }).catch(err => {
+    console.error('Erreur:', err);
+    showMsg(msg, '❌ Erreur de recherche : ' + err.message, true);
+  });
 }
 
 function showMsg(el, txt, isErr) {
