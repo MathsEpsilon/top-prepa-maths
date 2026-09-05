@@ -2276,7 +2276,10 @@ function renderAccordion() {
     const chip = document.createElement('div');
     chip.className = 'chip' + (isOpen ? ' open' : '') + (isLocked ? ' locked' : '');
     chip.onclick = () => {
-      if (isLocked) { showToast("🔒 Chapitre pas encore débloqué — abonne-toi pour un accès immédiat."); return; }
+      if (isLocked) { 
+        showToast(`🔒 "${c.name}" est payant — Abonnez-vous pour débloquer tous les chapitres payants.`); 
+        return; 
+      }
       openChapters[c.id] = !isOpen; renderAccordion();
     };
 
@@ -2291,6 +2294,16 @@ function renderAccordion() {
     const label = document.createElement('span'); label.className = 'chip-label';
     const icon = document.createElement('span'); icon.textContent = isLocked ? '🔒' : '📁';
     const nameSpan = document.createElement('span'); nameSpan.className = 'chip-name'; nameSpan.textContent = `${c.numero || c.order + 1}. ${c.name}`;
+    
+    // ✅ Badge GRATUIT / PAYANT
+    const badgeSpan = document.createElement('span');
+    badgeSpan.style.cssText = `
+      font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; margin-left:8px;
+      ${c.unlockedFree ? 'background:#d1fae5; color:#065f46;' : 'background:#fee2e2; color:#7f1d1d;'}
+    `;
+    badgeSpan.textContent = c.unlockedFree ? '✅ GRATUIT' : '🔒 PAYANT';
+    nameSpan.appendChild(badgeSpan);
+    
     const countSpan = document.createElement('span'); countSpan.className = 'chip-count'; countSpan.textContent = isLocked ? '(abonnement requis)' : `(${chapterFiles.length})`;
     label.appendChild(icon); label.appendChild(nameSpan); label.appendChild(countSpan);
     chip.appendChild(label);
@@ -2441,15 +2454,20 @@ function createChapter(pathKey) {
     return;
   }
   const nextOrder = (window._curChapters || []).length;
-  const nextNumero = nextOrder + 1;  // ✅ Numéro = ordre + 1
+  const nextNumero = nextOrder + 1;
+  
+  // ✅ Le premier chapitre (order=0) est gratuit, les autres sont payants
+  const isFirstChapter = nextOrder === 0;
+  
   db.collection('chapters').add({
     path: pathKey,
     name: trimmed,
     order: nextOrder,
-    numero: nextNumero,  // ✅ Ajouter le numéro
+    numero: nextNumero,
+    unlockedFree: isFirstChapter,  // ✅ Gratuit si premier, payant sinon
     ts: Date.now()
   }).then(() => {
-    showToast('Chapitre créé !');
+    showToast(isFirstChapter ? 'Chapitre créé (GRATUIT)' : 'Chapitre créé (PAYANT - à débloquer)');
     loadFiles();
   }).catch(err => {
     console.error('Échec de la création du chapitre :', err);
@@ -2601,17 +2619,25 @@ function closeChaptersManager() {
   document.getElementById('chaptersOverlay').classList.remove('show');
 }
 
-/* ✅ Migration : ajouter numero aux chapitres existants */
+/* ✅ Migration : ajouter numero et unlockedFree aux chapitres existants */
 function migrateChaptersNumeros() {
   const chapters = window._curChapters || [];
-  const needsMigration = chapters.filter(c => !c.numero || c.numero === undefined);
+  const needsMigration = chapters.filter(c => !c.numero || c.numero === undefined || c.unlockedFree === undefined);
   if (needsMigration.length === 0) return;
   
-  console.log(`🔄 Migration : ajouter numéros à ${needsMigration.length} chapitre(s)`);
+  console.log(`🔄 Migration : ajouter numéros et états à ${needsMigration.length} chapitre(s)`);
   const batch = db.batch();
   chapters.forEach((c, idx) => {
+    const update = {};
     if (!c.numero || c.numero === undefined) {
-      batch.update(db.collection('chapters').doc(c.id), { numero: idx + 1 });
+      update.numero = idx + 1;
+    }
+    // ✅ Le premier chapitre (order=0) est gratuit, les autres payants
+    if (c.unlockedFree === undefined) {
+      update.unlockedFree = (c.order === 0);
+    }
+    if (Object.keys(update).length > 0) {
+      batch.update(db.collection('chapters').doc(c.id), update);
     }
   });
   batch.commit().catch(err => console.error('Erreur migration :', err));
