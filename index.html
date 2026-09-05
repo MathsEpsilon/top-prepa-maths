@@ -561,9 +561,6 @@
         </div>
         <button class="btn-main" onclick="doSignup()" data-i18n="btnSignup">Créer mon compte</button>
       </div>
-      <div id="socialLogin">
-        <div class="sep"><span data-i18n="orSep">ou</span></div>
-      </div>
       <div id="confirmPanel" style="display:none; text-align:center">
         <h3 style="color:#16a34a; margin-bottom:10px" data-i18n="confTitle">✅ Compte créé !</h3>
         <p style="font-size:14px; color:var(--gris)" data-i18n="confPw">Voici votre mot de passe (il commence par « cc ») :</p>
@@ -1057,7 +1054,6 @@ function switchTab(t) {
   document.getElementById('loginForm').style.display = t==='login'?'block':'none';
   document.getElementById('signupForm').style.display = t==='signup'?'block':'none';
   document.getElementById('confirmPanel').style.display = 'none';
-  document.getElementById('socialLogin').style.display = 'block';
 }
 
 /* ================= Authentification ================= */
@@ -1293,7 +1289,6 @@ function doSignup() {
     batch.commit().then(() => {
       document.getElementById('genPass').innerText = generatedPassword;
       document.getElementById('signupForm').style.display = 'none';
-      document.getElementById('socialLogin').style.display = 'none';
       document.getElementById('confirmPanel').style.display = 'block';
     }).catch(err => {
       console.error('❌ Erreur création compte :', err);
@@ -1314,55 +1309,6 @@ function doSignup() {
 
 function afterConfirm() {
   switchTab('login');
-}
-
-/* ---- Connexion avec Google (Firebase Authentication) ---- */
-function googleLogin() {
-  const msg = document.getElementById('authMsg');
-  const provider = new firebase.auth.GoogleAuthProvider();
-  firebase.auth().signInWithPopup(provider).then(res => {
-    const fu = res.user;
-    const uname = (fu.email ? fu.email.split('@')[0] : 'gg_' + fu.uid.slice(0, 10))
-                  .toLowerCase().replace(/[^a-z0-9._-]/g, '');
-    db.collection('users').doc(uname).get().then(doc => {
-      const userObj = doc.exists ? doc.data() : {
-        name: fu.displayName || uname,
-        username: uname,
-        searchKey: uname,
-        email: fu.email || '',
-        region: '',
-        city: '',
-        password: '(google)',
-        role: 'student',
-        group: 'prepa',
-        provider: 'google',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      if (doc.exists && userObj.blocked) {
-        firebase.auth().signOut().catch(() => {});
-        showMsg(msg, I18N.errBlocked[lang], true);
-        return;
-      }
-      const go = () => { logConnection(userObj); loginAs(userObj); };
-      if (doc.exists) {
-        go();
-      } else {
-        const batch = db.batch();
-        batch.set(db.collection('users').doc(uname), userObj);
-        if (userObj.email) batch.set(db.collection('emailIndex').doc(userObj.email.toLowerCase()), { username: uname });
-        batch.set(db.collection('stats').doc('public'), { totalUsers: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-        batch.commit().then(go);
-      }
-    });
-  }).catch(err => {
-    if (err && (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found')) {
-      showMsg(msg, I18N.errGoogleNotEnabled[lang], true);
-    } else if (err && err.code === 'auth/popup-closed-by-user') {
-      showMsg(msg, I18N.errGoogleClosed[lang], true);
-    } else {
-      showMsg(msg, I18N.errGoogleFail[lang] + (err && err.message ? err.message : ''), true);
-    }
-  });
 }
 
 function showMsg(el, txt, isErr) {
