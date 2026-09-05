@@ -2101,7 +2101,8 @@ function loadFiles() {
 
   const chaptersPromise = Promise.all(keys.map(k => db.collection('chapters').where('path', '==', k).get()))
     .catch(err => { console.error('Chapitres indisponibles (règles Firestore ?) :', err); return []; });
-  const filesPromise = Promise.all(keys.map(k => db.collection('files').where('path', '==', k).get()));
+  const filesPromise = Promise.all(keys.map(k => db.collection('files').where('path', '==', k).get()))
+    .catch(err => { console.error('Fichiers indisponibles (règles Firestore ?) :', err); return []; });
 
   Promise.all([chaptersPromise, filesPromise]).then(([chapSnaps, fileSnaps]) => {
     /* --- Chapitres : anti-doublons par nom + tri --- */
@@ -2140,8 +2141,14 @@ function loadFiles() {
 
     renderAccordion();
   }).catch(err => {
-    console.error(err);
-    fContainer.innerHTML = `<p style="padding:20px;text-align:center;color:red;">Erreur lors du chargement des documents.</p>`;
+    console.error('❌ Erreur complète loadFiles() :', err);
+    const errMsg = err.message || String(err);
+    const displayMsg = errMsg.includes('permission-denied') 
+      ? 'Erreur de permission Firestore (vérifiez les règles)'
+      : errMsg.includes('failed-precondition')
+      ? 'Erreur de configuration Firestore'
+      : `Erreur : ${errMsg}`;
+    fContainer.innerHTML = `<p style="padding:20px;text-align:center;color:red;">⚠️ ${displayMsg}</p>`;
   });
 }
 
