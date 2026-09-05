@@ -596,6 +596,8 @@
     <button class="btn-sub" id="subBtn" onclick="openSubscriptionPanel()" style="display:none">🔓 Mon abonnement</button>
     <!-- ✅ Bouton admin pour gérer les utilisateurs -->
     <button class="btn-admin-users" id="btnAdminUsers" style="display:none; background:linear-gradient(135deg,#0f2a5c,#1d4ed8); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700;" onclick="document.getElementById('stUsersDetails').open = true; document.getElementById('stUsersDetails').scrollIntoView({behavior:'smooth', block:'center'})">👥 Gérer les utilisateurs</button>
+    <!-- ✅ Bouton admin pour gérer les chapitres -->
+    <button class="btn-admin-chapters" id="btnAdminChapters" style="display:none; background:linear-gradient(135deg,#8b5cf6,#d946ef); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700;" onclick="openChaptersManager()">📚 Chapitres</button>
     <div class="user-chip">
       <div class="avatar" id="avatar"></div>
       <span id="userName"></span>
@@ -609,6 +611,16 @@
       <button class="sub-close" onclick="closeSubscriptionPanel()">✕</button>
       <h2>Mon abonnement</h2>
       <div id="subPanelBody"></div>
+    </div>
+  </div>
+
+  <!-- ✅ Panel de gestion des chapitres -->
+  <div class="sub-overlay" id="chaptersOverlay" onclick="if(event.target===this) closeChaptersManager()">
+    <div class="sub-modal" style="max-width:600px; max-height:80vh; overflow-y:auto;">
+      <button class="sub-close" onclick="closeChaptersManager()">✕</button>
+      <h2>📚 Gestion des Chapitres</h2>
+      <p style="color:#666; font-size:13px; margin-bottom:16px;">Actuellement : <strong id="chapManagerPath"></strong></p>
+      <div id="chaptersManagerList" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
   </div>
 
@@ -1100,6 +1112,7 @@ function loginAs(userObj) {
     document.getElementById('adminBadge').style.display = 'inline-block';
     document.getElementById('btnAdd').style.display = 'inline-block';
     document.getElementById('btnAdminUsers').style.display = 'inline-block';  // ✅ Montrer le bouton de gestion des utilisateurs
+    document.getElementById('btnAdminChapters').style.display = 'inline-block';  // ✅ Montrer le bouton de gestion des chapitres
     document.getElementById('statsPanel').classList.add('show');
     document.getElementById('visioAdmin').style.display = 'block';
     document.getElementById('subBtn').style.display = 'none';
@@ -1107,6 +1120,7 @@ function loginAs(userObj) {
     document.getElementById('adminBadge').style.display = 'none';
     document.getElementById('btnAdd').style.display = 'none';
     document.getElementById('btnAdminUsers').style.display = 'none';  // ✅ Cacher le bouton pour les étudiants
+    document.getElementById('btnAdminChapters').style.display = 'none';  // ✅ Cacher le bouton pour les étudiants
     document.getElementById('statsPanel').classList.remove('show');
     document.getElementById('visioAdmin').style.display = 'none';
     // 🔕 Bouton "Mon abonnement" masqué pour l'instant : le paiement n'est
@@ -2456,6 +2470,118 @@ function deleteChapter(chapter) {
     console.error('Échec de la suppression du chapitre :', err);
     alert(`Échec de la suppression : ${err.message || err}`);
   });
+}
+
+/* ================= 🎯 GESTIONNAIRE DE CHAPITRES (Admin) ================= */
+function openChaptersManager() {
+  const chapters = (window._curChapters || []).slice();
+  const pathDisplay = `${activeSub || 'Licence'} / ${activeLeaf || 'Documents'}`;
+  
+  document.getElementById('chapManagerPath').innerText = pathDisplay;
+  const container = document.getElementById('chaptersManagerList');
+  container.innerHTML = '';
+  
+  chapters.forEach((c, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = `
+      background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; padding:14px;
+      display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+    `;
+    
+    // ✅ Numéro d'ordre
+    const numSpan = document.createElement('span');
+    numSpan.style.cssText = `
+      background:linear-gradient(135deg,#0f2a5c,#1d4ed8); color:#fff;
+      width:32px; height:32px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:800; font-size:14px;
+    `;
+    numSpan.textContent = c.order + 1;
+    
+    // ✅ Infos du chapitre
+    const info = document.createElement('div');
+    info.style.cssText = `flex:1;`;
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText = `font-weight:700; color:#1e293b; margin-bottom:4px;`;
+    nameEl.textContent = c.name;
+    const statusEl = document.createElement('small');
+    statusEl.style.cssText = `color:#666; font-size:12px;`;
+    statusEl.textContent = c.unlockedFree ? '✅ Gratuit pour tous' : '🔒 À débloquer';
+    info.appendChild(nameEl);
+    info.appendChild(statusEl);
+    
+    // ✅ Actions
+    const actions = document.createElement('div');
+    actions.style.cssText = `display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;`;
+    
+    // Bouton ↑
+    const upBtn = document.createElement('button');
+    upBtn.textContent = '↑';
+    upBtn.style.cssText = `padding:6px 8px; border:1px solid #ddd; background:#fff; border-radius:6px; cursor:pointer; font-weight:700; opacity:${idx === 0 ? '0.3' : '1'};`;
+    upBtn.disabled = idx === 0;
+    upBtn.onclick = () => { moveChapter(idx, -1); openChaptersManager(); };
+    actions.appendChild(upBtn);
+    
+    // Bouton ↓
+    const dnBtn = document.createElement('button');
+    dnBtn.textContent = '↓';
+    dnBtn.style.cssText = `padding:6px 8px; border:1px solid #ddd; background:#fff; border-radius:6px; cursor:pointer; font-weight:700; opacity:${idx === chapters.length - 1 ? '0.3' : '1'};`;
+    dnBtn.disabled = idx === chapters.length - 1;
+    dnBtn.onclick = () => { moveChapter(idx, 1); openChaptersManager(); };
+    actions.appendChild(dnBtn);
+    
+    // Bouton gratuit/payant
+    const freeBtn = document.createElement('button');
+    freeBtn.textContent = c.unlockedFree ? '✅ Gratuit' : '🔒 Payant';
+    freeBtn.style.cssText = `padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-weight:700; background:${c.unlockedFree ? '#d1fae5' : '#fee2e2'}; color:${c.unlockedFree ? '#065f46' : '#7f1d1d'}; font-size:12px;`;
+    freeBtn.onclick = () => {
+      db.collection('chapters').doc(c.id).update({ unlockedFree: !c.unlockedFree })
+        .then(() => { showToast(`Chapitre ${c.unlockedFree ? 'rendu payant' : 'rendu gratuit'}`); openChaptersManager(); })
+        .catch(err => alert(`Erreur : ${err.message}`));
+    };
+    actions.appendChild(freeBtn);
+    
+    // Bouton supprimer
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑';
+    delBtn.style.cssText = `padding:6px 8px; border:1px solid #fca5a5; background:#ffebee; border-radius:6px; cursor:pointer; font-weight:700; color:#c53030;`;
+    delBtn.onclick = () => {
+      if (confirm(`Supprimer "${c.name}" et dissocier ses fichiers ?`)) {
+        deleteChapter(c);
+        openChaptersManager();
+      }
+    };
+    actions.appendChild(delBtn);
+    
+    row.appendChild(numSpan);
+    row.appendChild(info);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+  
+  // Bouton ajouter un chapitre
+  const addRow = document.createElement('div');
+  addRow.style.cssText = `
+    background:#f0f9ff; border:2px dashed #0ea5e9; border-radius:10px; padding:14px;
+    text-align:center; cursor:pointer; transition:all 0.2s;
+  `;
+  addRow.onmouseover = () => addRow.style.background = '#e0f2fe';
+  addRow.onmouseout = () => addRow.style.background = '#f0f9ff';
+  addRow.onclick = () => {
+    const name = prompt('Nom du nouveau chapitre :');
+    if (name && name.trim()) {
+      createChapter((window._curKeys || [])[0]);
+      setTimeout(() => openChaptersManager(), 500);
+    }
+  };
+  addRow.innerHTML = '<strong style="color:#0284c7;">+ Ajouter un chapitre</strong>';
+  container.appendChild(addRow);
+  
+  document.getElementById('chaptersOverlay').classList.add('show');
+}
+
+function closeChaptersManager() {
+  document.getElementById('chaptersOverlay').classList.remove('show');
 }
 
 function assignChapterToFile(f) {
