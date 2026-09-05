@@ -594,6 +594,8 @@
     </div>
     <button class="btn-lang2" id="langBtn" onclick="toggleLang()">EN</button>
     <button class="btn-sub" id="subBtn" onclick="openSubscriptionPanel()" style="display:none">🔓 Mon abonnement</button>
+    <!-- ✅ Bouton admin pour gérer les utilisateurs -->
+    <button class="btn-admin-users" id="btnAdminUsers" style="display:none; background:linear-gradient(135deg,#0f2a5c,#1d4ed8); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700;" onclick="document.getElementById('stUsersDetails').open = true; document.getElementById('stUsersDetails').scrollIntoView({behavior:'smooth', block:'center'})">👥 Gérer les utilisateurs</button>
     <div class="user-chip">
       <div class="avatar" id="avatar"></div>
       <span id="userName"></span>
@@ -1097,12 +1099,14 @@ function loginAs(userObj) {
   if(currentUser.role === 'admin') {
     document.getElementById('adminBadge').style.display = 'inline-block';
     document.getElementById('btnAdd').style.display = 'inline-block';
+    document.getElementById('btnAdminUsers').style.display = 'inline-block';  // ✅ Montrer le bouton de gestion des utilisateurs
     document.getElementById('statsPanel').classList.add('show');
     document.getElementById('visioAdmin').style.display = 'block';
     document.getElementById('subBtn').style.display = 'none';
   } else {
     document.getElementById('adminBadge').style.display = 'none';
     document.getElementById('btnAdd').style.display = 'none';
+    document.getElementById('btnAdminUsers').style.display = 'none';  // ✅ Cacher le bouton pour les étudiants
     document.getElementById('statsPanel').classList.remove('show');
     document.getElementById('visioAdmin').style.display = 'none';
     // 🔕 Bouton "Mon abonnement" masqué pour l'instant : le paiement n'est
@@ -2237,7 +2241,13 @@ function renderAccordion() {
   );
 
   chapters.forEach((c, idx) => {
-    const chapterFiles = keptAll.filter(f => (f.chapter || null) === c.id);
+    // ✅ FIX: Pour le premier chapitre (order=0), inclure AUSSI les fichiers sans chapter
+    const isFirstChapter = c.order === 0;
+    const chapterFiles = keptAll.filter(f => {
+      if (f.chapter === c.id) return true;  // Fichiers associés au chapitre
+      if (isFirstChapter && !f.chapter) return true;  // Fichiers sans chapitre → premier chapitre par défaut
+      return false;
+    });
     const isOpen = !!openChapters[c.id];
     const isLocked = !isSubscribed && c.order !== 0 && !c.unlockedFree;
 
