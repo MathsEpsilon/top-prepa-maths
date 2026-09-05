@@ -737,6 +737,13 @@
       <div class="stat-card"><span data-i18n="statOnline">🟢 En ligne</span><b id="stOnline">1</b></div>
       <div class="stat-card"><span data-i18n="statFiles">📄 Fichiers</span><b id="stFiles">0</b></div>
       <div class="stat-card"><span data-i18n="statDl">⬇ Téléchargements</span><b id="stDl">0</b></div>
+      
+      <!-- ✅ Panel : Comptes en attente d'approbation -->
+      <details id="stPendingApproval" style="background:#fffbeb; border:2px solid #fbbf24; border-radius:8px; padding:12px; margin:8px 0;">
+        <summary style="cursor:pointer; font-weight:700; color:#b45309;">⏳ Comptes en attente d'approbation (<span id="stPendingCount">0</span>)</summary>
+        <div id="stPending" style="margin-top:12px;"></div>
+      </details>
+      
       <details id="stUsersDetails">
         <summary><span data-i18n="statUsersList">👥 Liste des inscrits</span> (<span id="stUsersCount">0</span>)</summary>
         <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="exportUsersCSV()" data-i18n="btnExportUsers">⬇ Exporter la liste (CSV)</button>
@@ -1223,6 +1230,13 @@ function continueAsStudentLogin(userOrEmail, pass, msg, isEmailLogin) {
 
 function verifyPassword(user, pass, msgEl) {
   if (user.blocked) { showMsg(msgEl, I18N.errBlocked[lang], true); return; }
+  
+  // ✅ Vérifier si le compte est approuvé par l'admin
+  if (!user.approved) { 
+    showMsg(msgEl, '⏳ Votre compte est en attente d\'approbation par l\'administrateur. Veuillez réessayer plus tard.', true); 
+    return; 
+  }
+  
   if(user.password === pass) {
     logConnection(user);
     // ✅ Auto-réparation : garantit que emailIndex existe pour les comptes
@@ -1299,6 +1313,8 @@ function doSignup() {
       password: generatedPassword,
       role: 'student',
       group: studentGroup,
+      approved: false,  // ✅ Compte en attente d'approbation
+      status: 'pending',  // ✅ État : 'pending', 'approved', 'blocked'
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
@@ -1479,6 +1495,52 @@ function renderUsersList(snap) {
   if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
 }
 
+/* ✅ Afficher les comptes en attente d'approbation */
+function renderPendingApproval(snap) {
+  if (!snap) return;
+  const cnt = document.getElementById('stPendingCount');
+  if (cnt) cnt.innerText = snap.size;
+  const ul = document.getElementById('stPending');
+  if (!ul) return;
+  ul.innerHTML = '';
+  
+  const tries = snap.docs.slice().sort((a, b) => String(a.data().name||'').localeCompare(String(b.data().name||'')));
+  tries.forEach(doc => {
+    const u = doc.data();
+    const region = u.region || '';
+    const city = u.city || '';
+    const loc = region ? (city ? `${region} • ${city}` : region) : I18N.notSpecified[lang];
+    const row = document.createElement('div');
+    row.className = 'top-item user-row';
+    row.title = u.email || '';
+    row.innerHTML = `<div class="row-top"><span style="color:#b45309; font-weight:700;">⏳ ${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+
+    /* --- Actions admin : Approuver / Rejeter --- */
+    if (currentUser && currentUser.role === 'admin') {
+      const actions = document.createElement('div');
+      actions.className = 'row-actions';
+
+      const approveBtn = document.createElement('button');
+      approveBtn.className = 'btn-user-action' ;
+      approveBtn.textContent = '✅ Approuver';
+      approveBtn.style.cssText = 'background:#22c55e; color:#fff;';
+      approveBtn.onclick = (e) => { e.stopPropagation(); adminApproveUser(doc.id); };
+      actions.appendChild(approveBtn);
+
+      const rejectBtn = document.createElement('button');
+      rejectBtn.className = 'btn-user-action btn-user-delete';
+      rejectBtn.textContent = '❌ Rejeter';
+      rejectBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(doc.id); };
+      actions.appendChild(rejectBtn);
+
+      row.appendChild(actions);
+    }
+
+    ul.appendChild(row);
+  });
+  if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
+}
+
 /* ================= Export CSV de la liste des inscrits (admin) ================= */
 function exportUsersCSV() {
   if (!currentUser || currentUser.role !== 'admin') return;
@@ -1552,6 +1614,22 @@ function adminToggleBlockUser(username, isCurrentlyBlocked) {
   });
 }
 
+/* ✅ Approuver un compte en attente */
+function adminApproveUser(username) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (!confirm(`Approuver le compte "${username}" ?`)) return;
+  
+  db.collection('users').doc(username).update({ 
+    approved: true,
+    status: 'approved'
+  }).then(() => {
+    showToast(`✅ Compte "${username}" approuvé !`);
+  }).catch(err => {
+    console.error('Échec de l\'approbation :', err);
+    alert(`Erreur : ${err.message || err}`);
+  });
+}
+
 function startRealtimeListeners() {
   if (window._rtStarted) return;
   window._rtStarted = true;
@@ -1583,6 +1661,13 @@ function startRealtimeListeners() {
         console.error('Lecture de la collection "users" impossible :', err);
         document.getElementById('totalUsers').innerText = '?';
         document.getElementById('stReg').innerText = '?';
+      });
+      
+      // ✅ Charger aussi les comptes en attente d'approbation
+      db.collection('users').where('approved', '==', false).onSnapshot(snap => {
+        renderPendingApproval(snap);
+      }, err => {
+        console.error('Erreur chargement comptes en attente :', err);
       });
     };
     if (firebase.auth().currentUser) {
