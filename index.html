@@ -2132,6 +2132,11 @@ function loadFiles() {
     chapters.sort((a, b) => (((a.order != null ? a.order : 1e9)) - ((b.order != null ? b.order : 1e9))) || String(a.name||'').localeCompare(String(b.name||'')));
     window._curChapters = chapters;
 
+    // ✅ Migration automatique des chapitres sans numéro (admin seulement)
+    if (currentUser && currentUser.role === 'admin') {
+      migrateChaptersNumeros();
+    }
+
     const docs = [];
     fileSnaps.forEach(sn => sn.docs.forEach(d => docs.push(Object.assign({ id: d.id }, d.data()))));
 
@@ -2285,7 +2290,7 @@ function renderAccordion() {
 
     const label = document.createElement('span'); label.className = 'chip-label';
     const icon = document.createElement('span'); icon.textContent = isLocked ? '🔒' : '📁';
-    const nameSpan = document.createElement('span'); nameSpan.className = 'chip-name'; nameSpan.textContent = c.name;
+    const nameSpan = document.createElement('span'); nameSpan.className = 'chip-name'; nameSpan.textContent = `${c.numero || c.order + 1}. ${c.name}`;
     const countSpan = document.createElement('span'); countSpan.className = 'chip-count'; countSpan.textContent = isLocked ? '(abonnement requis)' : `(${chapterFiles.length})`;
     label.appendChild(icon); label.appendChild(nameSpan); label.appendChild(countSpan);
     chip.appendChild(label);
@@ -2316,6 +2321,10 @@ function renderAccordion() {
         nameSpan.contentEditable = 'true';
         nameSpan.classList.add('editing');
         nameSpan.focus();
+        // ✅ Sélectionner que le nom (pas le numéro)
+        const parts = prevText.split('. ');
+        const nameOnly = parts.slice(1).join('. ');
+        nameSpan.textContent = nameOnly;
         document.execCommand('selectAll', false, null);
 
         const finish = (save) => {
@@ -2432,10 +2441,12 @@ function createChapter(pathKey) {
     return;
   }
   const nextOrder = (window._curChapters || []).length;
+  const nextNumero = nextOrder + 1;  // ✅ Numéro = ordre + 1
   db.collection('chapters').add({
     path: pathKey,
     name: trimmed,
     order: nextOrder,
+    numero: nextNumero,  // ✅ Ajouter le numéro
     ts: Date.now()
   }).then(() => {
     showToast('Chapitre créé !');
@@ -2488,15 +2499,21 @@ function openChaptersManager() {
       display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
     `;
     
-    // ✅ Numéro d'ordre
-    const numSpan = document.createElement('span');
-    numSpan.style.cssText = `
-      background:linear-gradient(135deg,#0f2a5c,#1d4ed8); color:#fff;
-      width:32px; height:32px; border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      font-weight:800; font-size:14px;
+    // ✅ Champ de numéro modifiable
+    const numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.min = '1';
+    numInput.value = c.numero || c.order + 1;
+    numInput.style.cssText = `
+      width:50px; padding:6px; border:1.5px solid #e2e8f0; border-radius:6px;
+      font-weight:800; font-size:14px; text-align:center; cursor:pointer;
     `;
-    numSpan.textContent = c.order + 1;
+    numInput.onchange = () => {
+      const newNum = parseInt(numInput.value) || 1;
+      db.collection('chapters').doc(c.id).update({ numero: newNum })
+        .then(() => { showToast(`Numéro changé en ${newNum}`); openChaptersManager(); })
+        .catch(err => { alert(`Erreur : ${err.message}`); numInput.value = c.numero || c.order + 1; });
+    };
     
     // ✅ Infos du chapitre
     const info = document.createElement('div');
@@ -2553,7 +2570,7 @@ function openChaptersManager() {
     };
     actions.appendChild(delBtn);
     
-    row.appendChild(numSpan);
+    row.appendChild(numInput);
     row.appendChild(info);
     row.appendChild(actions);
     container.appendChild(row);
@@ -2582,6 +2599,22 @@ function openChaptersManager() {
 
 function closeChaptersManager() {
   document.getElementById('chaptersOverlay').classList.remove('show');
+}
+
+/* ✅ Migration : ajouter numero aux chapitres existants */
+function migrateChaptersNumeros() {
+  const chapters = window._curChapters || [];
+  const needsMigration = chapters.filter(c => !c.numero || c.numero === undefined);
+  if (needsMigration.length === 0) return;
+  
+  console.log(`🔄 Migration : ajouter numéros à ${needsMigration.length} chapitre(s)`);
+  const batch = db.batch();
+  chapters.forEach((c, idx) => {
+    if (!c.numero || c.numero === undefined) {
+      batch.update(db.collection('chapters').doc(c.id), { numero: idx + 1 });
+    }
+  });
+  batch.commit().catch(err => console.error('Erreur migration :', err));
 }
 
 function assignChapterToFile(f) {
