@@ -563,10 +563,6 @@
       </div>
       <div id="socialLogin">
         <div class="sep"><span data-i18n="orSep">ou</span></div>
-        <button class="btn-google" onclick="googleLogin()">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.43 3.58v2.98h3.91c2.29-2.11 3.54-5.21 3.54-8.8z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.91-2.98c-1.09.73-2.5 1.16-4.02 1.16-3.09 0-5.71-2.09-6.65-4.9H1.28v3.07C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.35 14.37A7.15 7.15 0 0 1 5 12c0-.82.14-1.62.35-2.37V6.56H1.28A11.98 11.98 0 0 0 0 12c0 1.93.47 3.76 1.28 5.44l4.07-3.07z"/><path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.94 1.2 15.24 0 12 0 7.31 0 3.26 2.7 1.28 6.56l4.07 3.07C6.29 6.86 8.91 4.77 12 4.77z"/></svg>
-          <span data-i18n="btnGoogle">Continuer avec Google</span>
-        </button>
       </div>
       <div id="confirmPanel" style="display:none; text-align:center">
         <h3 style="color:#16a34a; margin-bottom:10px" data-i18n="confTitle">✅ Compte créé !</h3>
@@ -1299,8 +1295,21 @@ function doSignup() {
       document.getElementById('signupForm').style.display = 'none';
       document.getElementById('socialLogin').style.display = 'none';
       document.getElementById('confirmPanel').style.display = 'block';
+    }).catch(err => {
+      console.error('❌ Erreur création compte :', err);
+      const errMsg = err.message || String(err);
+      if (errMsg.includes('permission-denied')) {
+        showMsg(msg, '❌ Erreur Firestore : permissions insuffisantes. Contactez l\'admin.', true);
+      } else if (errMsg.includes('already-exists')) {
+        showMsg(msg, '❌ Cet utilisateur existe déjà.', true);
+      } else {
+        showMsg(msg, `❌ Erreur : ${errMsg}`, true);
+      }
     });
-  }).catch(() => showMsg(msg, I18N.errCreateFail[lang], true));
+  }).catch(err => {
+    console.error('❌ Erreur lors de la vérification utilisateur :', err);
+    showMsg(msg, `❌ Erreur de vérification : ${err.message || err}`, true);
+  });
 }
 
 function afterConfirm() {
