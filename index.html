@@ -2117,6 +2117,24 @@ function loadFiles() {
     const docs = [];
     fileSnaps.forEach(sn => sn.docs.forEach(d => docs.push(Object.assign({ id: d.id }, d.data()))));
 
+    // ✅ CORRECTION RÉTROACTIVE : les fichiers sans chapter → assigner au premier chapitre (order=0)
+    if (currentUser.role === 'admin' && chapters.length > 0) {
+      const firstChapter = chapters.find(c => c.order === 0);
+      if (firstChapter) {
+        const filesToFix = docs.filter(f => !f.chapter);
+        if (filesToFix.length > 0) {
+          console.log(`⚠️ Correction : ${filesToFix.length} fichier(s) sans chapitre → assignation au chapitre "${firstChapter.name}"`);
+          const batch = db.batch();
+          filesToFix.forEach(f => {
+            batch.update(db.collection('files').doc(f.id), { chapter: firstChapter.id });
+          });
+          batch.commit().catch(err => console.error('Erreur lors de la correction des fichiers :', err));
+          // Mettre à jour la liste locale aussi
+          filesToFix.forEach(f => f.chapter = firstChapter.id);
+        }
+      }
+    }
+
     // Repérer les nouveautés AVANT de marquer la section comme vue
     const newIds = {};
     docs.forEach(f => { if (isNewFile(f)) newIds[f.id] = true; });
@@ -2461,8 +2479,20 @@ function addPdfs(filesList) {
   const pathKey = `${activeFolder}_${activeSub}_${activeLeaf}`;
   const chapterToAssign = pendingChapterTarget || null;
   pendingChapterTarget = null;
-  const scopeList = chapterToAssign
-    ? (window._curDocsAll || []).filter(f => f.chapter === chapterToAssign)
+  
+  // ✅ Si aucun chapitre n'est spécifiquement ciblé, récupère le premier chapitre (order=0)
+  // comme destination par défaut pour les nouveaux fichiers
+  let defaultChapterId = null;
+  if (!chapterToAssign && window._curChapters && window._curChapters.length > 0) {
+    const firstChapter = window._curChapters.find(c => c.order === 0);
+    if (firstChapter) defaultChapterId = firstChapter.id;
+  }
+  
+  // Détermine quel chapitre recevra les nouveaux fichiers
+  const effectiveChapterId = chapterToAssign || defaultChapterId;
+  
+  const scopeList = effectiveChapterId
+    ? (window._curDocsAll || []).filter(f => f.chapter === effectiveChapterId)
     : (window._curDocsAll || []).filter(f => !f.chapter);
   const existingNames = scopeList.map(f => f.name);
   let nextOrder = scopeList.length;
@@ -2496,7 +2526,10 @@ function addPdfs(filesList) {
         order: nextOrder++,
         content: base64Data
       };
-      if (chapterToAssign) newDoc.chapter = chapterToAssign;
+      // ✅ Associer au chapitre ciblé, ou au premier chapitre gratuit (order=0) par défaut
+      if (effectiveChapterId) {
+        newDoc.chapter = effectiveChapterId;
+      }
 
       db.collection('files').add(newDoc).then(() => {
         showToast("Fichier ajouté !");
