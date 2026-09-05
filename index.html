@@ -2308,21 +2308,30 @@ function renderAccordion() {
     label.appendChild(icon); label.appendChild(nameSpan); label.appendChild(countSpan);
     chip.appendChild(label);
 
+    // ✅ ADMIN : Bouton toggle GRATUIT ↔ PAYANT pour CHAQUE chapitre
     if (currentUser.role === 'admin') {
-      const nextLockedOrder = chapters.filter(cc => cc.order !== 0 && !cc.unlockedFree).reduce((min, cc) => Math.min(min, cc.order), Infinity);
-      if (c.order === nextLockedOrder) {
-        const unlockBtn = document.createElement('span'); unlockBtn.className = 'chip-addpdf'; unlockBtn.textContent = '🔓 Débloquer';
-        unlockBtn.title = 'Rendre ce chapitre visible pour tous les étudiants inscrits';
-        unlockBtn.onclick = (e) => {
-          e.stopPropagation();
-          if (!confirm(`Débloquer "${c.name}" pour tous les étudiants inscrits (non-abonnés inclus) ?`)) return;
-          db.collection('chapters').doc(c.id).update({ unlockedFree: true }).then(() => {
-            showToast('Chapitre débloqué pour tous les étudiants !');
-            loadFiles();
-          });
-        };
-        chip.appendChild(unlockBtn);
-      }
+      const toggleFreeBtn = document.createElement('span');
+      toggleFreeBtn.className = 'chip-addpdf';
+      toggleFreeBtn.textContent = c.unlockedFree ? '✅ GRATUIT' : '🔒 PAYANT';
+      toggleFreeBtn.title = 'Cliquez pour basculer GRATUIT ↔ PAYANT';
+      toggleFreeBtn.style.cssText = `
+        background: ${c.unlockedFree ? '#d1fae5' : '#fee2e2'};
+        color: ${c.unlockedFree ? '#065f46' : '#7f1d1d'};
+        font-weight:700;
+        cursor:pointer;
+      `;
+      toggleFreeBtn.onclick = (e) => {
+        e.stopPropagation();
+        const newState = !c.unlockedFree;
+        db.collection('chapters').doc(c.id).update({ unlockedFree: newState }).then(() => {
+          showToast(`Chapitre "${c.name}" → ${newState ? '✅ GRATUIT' : '🔒 PAYANT'}`);
+          loadFiles();
+        }).catch(err => {
+          console.error('Erreur :', err);
+          alert(`Erreur : ${err.message}`);
+        });
+      };
+      chip.appendChild(toggleFreeBtn);
     }
 
     if (currentUser.role === 'admin') {
@@ -2400,8 +2409,8 @@ function renderAccordion() {
       wrap.appendChild(inner);
     }
 
-    // ✅ Masquer les chapitres vides pour les étudiants (admin voit tout)
-    const shouldDisplay = currentUser.role === 'admin' || chapterFiles.length > 0;
+    // ✅ Masquer les chapitres payants pour les étudiants
+    const shouldDisplay = currentUser.role === 'admin' || (c.unlockedFree && chapterFiles.length > 0);
     if (shouldDisplay) {
       bar.appendChild(wrap);
     }
