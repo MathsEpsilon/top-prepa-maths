@@ -6263,7 +6263,16 @@ body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
   const LANGS = [['fr-FR', 'Français'], ['en-US', 'English'], ['ar-TN', 'العربية']];
   const dLang = () => P().dictLang || (L() === 'en' ? 'en-US' : 'fr-FR');
   const mathOn = () => P().dictMath !== false;
-  const fontPx = () => Math.max(22, (+($('penSize') || {}).value || 3) * 6 + 14);
+  const DICT_SIZES = { S:24, M:32, L:44, XL:60 };
+  const fontPx = () => DICT_SIZES[P().dictSize || 'M'] || 32;
+  // Un curseur de dictée par page : chaque page garde sa propre position d'écriture
+  const curBy = {}; let lastPg = -1;
+  document.addEventListener('cc:page', () => {
+    const PGs = window.ccPages; if (!PGs) return;
+    const i = PGs.idx(); if (i === lastPg) return;
+    if (lastPg >= 0) curBy[lastPg] = cur;
+    cur = curBy[i] || { x:40, y:40, x0:null }; history = []; lastPg = i; showCaret();
+  });
 
   function mathify(s) {
     if (!mathOn()) return s;
@@ -6316,8 +6325,22 @@ body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
     const x0 = cur.x0 != null ? cur.x0 : (rtl ? W - 40 : 40), margin = 30;
     const maxW = rtl ? (x0 - margin) : (W - x0 - margin);
     const lines = wrapLines(s, Math.max(200, maxW));
+    const style = () => {
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      ctx.fillStyle = (typeof currentPenColor !== 'undefined' && currentPenColor) ? currentPenColor : '#0f172a';
+      ctx.font = `500 ${size}px Manrope, 'Segoe UI', Arial, sans-serif`;
+      ctx.textBaseline = 'top'; ctx.direction = rtl ? 'rtl' : 'ltr'; ctx.textAlign = rtl ? 'right' : 'left';
+    };
     lines.forEach(ln => {
-      if (cur.y + lh > H - 10) cur.y = 40; // retour en haut si on atteint le bas
+      // Bas de page atteint : on passe automatiquement à une NOUVELLE page (plus aucun texte superposé)
+      if (cur.y + lh > H - 40) {
+        ctx.restore();
+        const PGs = window.ccPages;
+        if (PGs) { PGs.add(); } else { ctx.clearRect(0, 0, W, H); }
+        cur = { x:x0, y:40, x0:x0 }; history = [];
+        ctx.save(); style();
+        UI.toast(L() === 'en' ? '📄 Page full: dictation continues on a new page' : '📄 Page pleine : la dictée continue sur une nouvelle page');
+      }
       ctx.fillText(ln, x0, cur.y); cur.y += lh;
     });
     ctx.restore();
@@ -6389,6 +6412,7 @@ body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
       <button class="bt-tool v6-mic" id="v6Mic">🎤 <span></span></button>
       <select id="v6Lang">${LANGS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
       <button class="bt-tool" id="v6Place">📍 <span></span></button>
+      <select id="v6Size" title="Taille du texte dicté"><option value="S">A</option><option value="M">A+</option><option value="L">A++</option><option value="XL">A+++</option></select>
       <label class="ck"><input type="checkbox" id="v6Math"> <span></span></label>`;
     bt.appendChild(r);
     $('v6Pen').onclick = () => setPenOnly(!penOnly());
@@ -6396,6 +6420,7 @@ body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
     $('v6Place').onclick = armPlace;
     $('v6Lang').onchange = e => { UI.setPref('dictLang', e.target.value); if (listening) { stopDict(); setTimeout(startDict, 300); } };
     $('v6Math').onchange = e => UI.setPref('dictMath', e.target.checked);
+    $('v6Size').onchange = e => { UI.setPref('dictSize', e.target.value); showCaret(); };
     // Raccourcis aussi dans la barre de taille (visible même en plein écran sans outils)
     const sb = $('ccSizeBar');
     if (sb) {
@@ -6416,6 +6441,7 @@ body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
     s('v6Pen', t('pen')); s('v6Mic', mic ? t('micStop') : t('mic')); s('v6Place', t('place'), t('placeHint'));
     const pl = $('v6Place'); if (pl) pl.classList.toggle('on', placing);
     const lg = $('v6Lang'); if (lg) { lg.value = dLang(); lg.title = t('langT'); }
+    const vs = $('v6Size'); if (vs) { vs.value = P().dictSize || 'M'; vs.title = t('size'); }
     const mc = $('v6Math'); if (mc) { mc.checked = mathOn(); mc.parentNode.querySelector('span').textContent = '∑ ' + t('math'); mc.parentNode.title = 'x au carré → x²,  pi → π,  inférieur ou égal à → ≤'; }
   }
 
@@ -6687,6 +6713,449 @@ body.pg-noarrows .pg-arrow { display:none; }
 
   function init7() { build(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init7); else init7();
+})();
+</script>
+
+<!-- =====================================================================
+     V8 — SALLE DE COURS EN DIRECT
+     Le professeur écrit sur son tableau : les élèves voient chaque page en
+     direct, consultent le PDF partagé et téléchargent le cours complet.
+     Données dans la collection Firestore existante « visio »
+     (documents « live » et « page_0 », « page_1 »…).
+     ===================================================================== -->
+<style>
+#ccLiveCard { background:var(--carte); border:1px solid var(--bord); border-radius:18px; box-shadow:var(--ombre); padding:18px; margin-bottom:16px; }
+#ccLiveCard h4 { font-family:'Spectral', Georgia, serif; font-size:22px; color:var(--titre); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.lv-pill { display:inline-flex; align-items:center; gap:7px; font-family:'Manrope', sans-serif; font-size:12.5px; font-weight:800; padding:4px 11px; border-radius:999px; background:#dc2626; color:#fff; }
+.lv-pill.off { background:var(--surf2); color:var(--gris); border:1px solid var(--bord); }
+.lv-pill .d { width:8px; height:8px; border-radius:50%; background:#fff; animation:v6pulse 1.4s infinite; }
+.lv-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+.lv-btn { padding:10px 14px; border-radius:11px; border:1px solid var(--bord); background:var(--surf2); color:var(--texte); font-weight:800; font-size:13.5px; cursor:pointer; }
+.lv-btn:hover { border-color:var(--bleu2); color:var(--bleu2); }
+.lv-btn.pri { background:var(--bleu2); color:#fff; border-color:var(--bleu2); }
+.lv-btn.red { background:#dc2626; color:#fff; border-color:#dc2626; }
+.lv-btn:disabled { opacity:.45; cursor:default; }
+.lv-in { padding:10px 12px; border-radius:11px; border:1.5px solid var(--bord); background:var(--surf2); color:var(--texte); font-size:14px; min-width:200px; flex:1; }
+.lv-stage { position:relative; background:#fff; border:1px solid var(--bord); border-radius:14px; overflow:hidden; aspect-ratio:1400/800; display:flex; align-items:center; justify-content:center; }
+.lv-stage img { width:100%; height:100%; object-fit:contain; display:block; }
+.lv-stage .ph { color:#94a3b8; font-weight:700; text-align:center; padding:20px; }
+.lv-stage .num { position:absolute; right:12px; bottom:10px; background:rgba(15,23,42,.78); color:#fff; font-weight:800; font-size:13px; border-radius:999px; padding:5px 12px; }
+.lv-stage:fullscreen { border-radius:0; border:none; }
+.lv-pages { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+.lv-pages button { min-width:38px; padding:7px 10px; border-radius:9px; border:1px solid var(--bord); background:var(--surf2); color:var(--texte); font-weight:800; cursor:pointer; }
+.lv-pages button.on { background:var(--bleu2); color:#fff; border-color:var(--bleu2); }
+.lv-pages button.prof { box-shadow:inset 0 -3px 0 #dc2626; }
+.lv-doc { display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:color-mix(in srgb, var(--bleu2) 7%, var(--carte)); border:1px solid var(--bord); border-radius:12px; padding:10px 12px; margin:10px 0; font-weight:700; }
+.lv-doc span { flex:1; min-width:160px; }
+.lv-frame { width:100%; height:75vh; border:1px solid var(--bord); border-radius:12px; margin-top:8px; background:#fff; display:none; }
+.lv-frame.show { display:block; }
+.lv-note { font-size:12.5px; color:var(--gris); margin-top:6px; }
+#ccLiveBanner { position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:1500; background:#dc2626; color:#fff; border-radius:14px; padding:10px 14px 10px 18px;
+  display:none; align-items:center; gap:12px; font-weight:800; box-shadow:0 14px 40px rgba(220,38,38,.4); max-width:92vw; }
+#ccLiveBanner.show { display:flex; }
+#ccLiveBanner button { border:none; border-radius:9px; padding:7px 12px; font-weight:800; cursor:pointer; }
+#ccLiveBanner .go { background:#fff; color:#dc2626; } #ccLiveBanner .x { background:rgba(255,255,255,.2); color:#fff; }
+#ccLiveTag { display:none; align-items:center; gap:7px; padding:0 12px; height:42px; border-radius:11px; background:#dc2626; color:#fff; font-weight:800; font-size:13.5px; }
+#ccLiveTag.show { display:inline-flex; }
+#ccLiveTag .d { width:9px; height:9px; border-radius:50%; background:#fff; animation:v6pulse 1.4s infinite; }
+#ccBoardRow5 { display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%; padding-top:10px; border-top:1px solid var(--bord); }
+.pk-item { display:flex; gap:8px; align-items:center; border:1px solid var(--bord); border-radius:11px; padding:9px 10px; margin-bottom:7px; background:var(--carte); }
+.pk-item .nm { flex:1; min-width:0; font-size:13.5px; font-weight:700; }
+.pk-item .nm small { display:block; color:var(--gris); font-weight:600; font-size:11.5px; }
+.pk-item button { padding:6px 9px; border-radius:8px; border:1px solid var(--bord); background:var(--surf2); color:var(--texte); font-weight:700; font-size:12px; cursor:pointer; white-space:nowrap; }
+.pk-item button:hover { border-color:var(--bleu2); color:var(--bleu2); }
+</style>
+
+<div id="ccLiveBanner" role="alert"><span id="ccLbTxt"></span><button class="go" id="ccLbGo"></button><button class="x" id="ccLbX">✕</button></div>
+<aside class="cc-drawer wide" id="ccPdfPick" aria-label="Partager un PDF"></aside>
+<input type="file" id="ccPdfLocal" accept="application/pdf" style="display:none">
+
+<script>
+(function () {
+  'use strict';
+  const UI = window.ccUI, PG = window.ccPages;
+  if (!UI || !PG || typeof db === 'undefined') return;
+  const $ = id => document.getElementById(id);
+  const esc = UI.esc, toast = UI.toast;
+  const L = () => (typeof lang !== 'undefined' && lang === 'en') ? 'en' : 'fr';
+  const isAdmin = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin';
+  const COL = 'visio', STATE = 'live', pid = i => 'page_' + i;
+  UI.addDrawer('ccPdfPick');
+
+  const TX = {
+    fr:{ room:'Salle de cours en direct', live:'EN DIRECT', ended:'Séance terminée', none:'Aucune séance pour le moment', titlePh:'Titre de la séance (ex. Séries numériques — cours 4)',
+      meetPh:'Lien Meet / Zoom pour le son et la vidéo (facultatif)', start:'🔴 Démarrer la séance', stop:'■ Terminer la séance', goBoard:'✍️ Aller au tableau',
+      share:'📄 Partager un PDF', unshare:'Retirer', pdfShared:'Document du cours', open:'👁 Ouvrir ici', close:'✕ Fermer', dl:'⬇ Télécharger',
+      dlCourse:'⬇ Télécharger tout le cours (PDF)', dlPage:'⬇ Cette page (image)', follow:'Suivre le professeur', full:'⛶ Plein écran',
+      waiting:'Le professeur n’a pas encore écrit sur cette page…', profHere:'Le professeur est sur cette page', page:'Page',
+      teacherNote:'Tout ce que vous écrivez sur le tableau blanc (stylo, formes, texte dicté, PDF importé…) est diffusé aux élèves environ toutes les 1,5 s.',
+      studentNote:'Le tableau se met à jour automatiquement. Vous pouvez revenir sur les pages précédentes et télécharger le cours à tout moment.',
+      started:'🔴 Séance en direct démarrée : vos élèves voient le tableau', stopped:'Séance terminée. Le cours reste téléchargeable par les élèves.',
+      banner:'🔴 Séance en direct : {t}', join:'Rejoindre', denied:'⚠️ Firestore a refusé l’enregistrement (règles de sécurité de la collection « visio »).',
+      pickT:'Partager un PDF', pickSearch:'Rechercher un document du site…', showStudents:'👁 Montrer aux élèves', toBoard:'✍️ Sur le tableau',
+      local:'📂 PDF depuis l’ordinateur (sur le tableau)', fitMode:'Mise en page sur le tableau', fitPage:'Page entière', fitWidth:'Pleine largeur (plus grand)',
+      importing:'Import du PDF… page {a}/{b}', imported:'✅ {n} page(s) ajoutée(s) au tableau', loadErr:'Impossible de lire ce PDF.',
+      publishQ:'Publier aussi le cours (PDF de toutes les pages) dans un dossier pour les élèves ?', folder:'Choisissez le dossier (numéro) :',
+      published:'📚 Cours publié dans le dossier', tooBig:'Le PDF du cours est trop volumineux pour être publié automatiquement (limite ~1 Mo). Il a été téléchargé : ajoutez-le avec « + Ajouter des PDF » si besoin.',
+      sharedOk:'📄 Document partagé avec les élèves', courseName:'Cours', onlyAdmin:'Réservé au professeur', boardLive:'Diffuser le tableau en direct', pdfImport:'📄 Importer un PDF' },
+    en:{ room:'Live classroom', live:'LIVE', ended:'Session ended', none:'No session at the moment', titlePh:'Session title (e.g. Series — lesson 4)',
+      meetPh:'Meet / Zoom link for audio and video (optional)', start:'🔴 Start the session', stop:'■ End the session', goBoard:'✍️ Go to the board',
+      share:'📄 Share a PDF', unshare:'Remove', pdfShared:'Course document', open:'👁 Open here', close:'✕ Close', dl:'⬇ Download',
+      dlCourse:'⬇ Download the whole lesson (PDF)', dlPage:'⬇ This page (image)', follow:'Follow the teacher', full:'⛶ Full screen',
+      waiting:'The teacher has not written on this page yet…', profHere:'The teacher is on this page', page:'Page',
+      teacherNote:'Everything you write on the whiteboard (pen, shapes, dictated text, imported PDF…) is broadcast to students about every 1.5 s.',
+      studentNote:'The board updates automatically. You can go back to previous pages and download the lesson at any time.',
+      started:'🔴 Live session started: your students see the board', stopped:'Session ended. Students can still download the lesson.',
+      banner:'🔴 Live session: {t}', join:'Join', denied:'⚠️ Firestore refused the write (security rules of the "visio" collection).',
+      pickT:'Share a PDF', pickSearch:'Search a site document…', showStudents:'👁 Show students', toBoard:'✍️ On the board',
+      local:'📂 PDF from the computer (on the board)', fitMode:'Layout on the board', fitPage:'Whole page', fitWidth:'Full width (larger)',
+      importing:'Importing PDF… page {a}/{b}', imported:'✅ {n} page(s) added to the board', loadErr:'Unable to read this PDF.',
+      publishQ:'Also publish the lesson (PDF of all pages) in a folder for students?', folder:'Choose the folder (number):',
+      published:'📚 Lesson published in the folder', tooBig:'The lesson PDF is too large to publish automatically (~1 MB limit). It was downloaded: add it with "+ Add PDFs" if needed.',
+      sharedOk:'📄 Document shared with students', courseName:'Lesson', onlyAdmin:'Teacher only', boardLive:'Broadcast the board live', pdfImport:'📄 Import a PDF' }
+  };
+  const t = k => TX[L()][k];
+
+  /* ================= État partagé (élèves + professeur) ================= */
+  let state = null, livePages = {}, unsub = null, viewIdx = 0, follow = true, prevActive = null, bannerClosed = false;
+  function listen() {
+    if (unsub) return;
+    try {
+      unsub = db.collection(COL).onSnapshot(snap => {
+        const pages = {}; let st = null;
+        snap.forEach(d => { if (d.id === STATE) st = d.data(); else if (d.id.indexOf('page_') === 0) pages[+d.id.slice(5)] = d.data(); });
+        state = st; livePages = pages;
+        if (st && st.active && prevActive === false && !isAdmin()) { bannerClosed = false; notifyStart(); }
+        if (st && st.active && prevActive === null && !isAdmin()) notifyStart();
+        prevActive = !!(st && st.active);
+        if (follow && st) viewIdx = Math.min(st.page || 0, Math.max(0, (st.pageCount || 1) - 1));
+        render(); syncBoardTag();
+      }, () => {});
+    } catch (e) {}
+  }
+  function notifyStart() {
+    const onVisio = typeof currentView !== 'undefined' && currentView === 'visio';
+    if (bannerClosed || onVisio) return;
+    $('ccLbTxt').textContent = t('banner').replace('{t}', (state && state.title) || t('room'));
+    $('ccLbGo').textContent = t('join');
+    $('ccLiveBanner').classList.add('show');
+    try { if ('Notification' in window && Notification.permission === 'granted' && UI.getP().notif) new Notification('Top Prepa Maths', { body:$('ccLbTxt').textContent }); } catch (e) {}
+  }
+  $('ccLbGo').onclick = () => { $('ccLiveBanner').classList.remove('show'); goVisio(); };
+  $('ccLbX').onclick = () => { bannerClosed = true; $('ccLiveBanner').classList.remove('show'); };
+  const goVisio = () => { try { handleSpecialTab('visio_tab', trNav('🎥 SÉANCE LIVE')); } catch (e) {} };
+  const goBoard = () => { try { handleSpecialTab('board_tab', trNav('✍️ TABLEAU BLANC')); } catch (e) {} };
+
+  /* ================= Diffusion du tableau (professeur) ================= */
+  let timer = null, lastHash = {}, busy = {}, lastState = '';
+  const small = document.createElement('canvas'); small.width = 140; small.height = 80;
+  function hashOf(src) {
+    const x = small.getContext('2d'); x.clearRect(0, 0, 140, 80); x.drawImage(src, 0, 0, 140, 80);
+    const d = x.getImageData(0, 0, 140, 80).data; let h = 0;
+    for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] * 3 + d[i + 1] * 5 + d[i + 2] * 7 + d[i + 3]) | 0;
+    return h;
+  }
+  const canWebp = (() => { try { const c = document.createElement('canvas'); c.width = c.height = 2; return c.toDataURL('image/webp').indexOf('data:image/webp') === 0; } catch (e) { return false; } })();
+  function encode(src) {
+    const W = src.width, H = src.height;
+    if (canWebp) { const u = src.toDataURL('image/webp', 0.72); if (u.length < 950000) return u; }
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.drawImage(src, 0, 0);
+    let q = 0.75, u = c.toDataURL('image/jpeg', q);
+    while (u.length > 950000 && q > 0.3) { q -= 0.15; u = c.toDataURL('image/jpeg', q); }
+    return u;
+  }
+  function imgDataCanvas(img) { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').putImageData(img, 0, 0); return c; }
+  const onErr = e => { if (e && e.code === 'permission-denied') toast(t('denied')); };
+  function uploadPage(i, src) {
+    if (busy[i]) return; const h = hashOf(src); if (lastHash[i] === h) return;
+    busy[i] = true;
+    db.collection(COL).doc(pid(i)).set({ img:encode(src), ts:Date.now() })
+      .then(() => { lastHash[i] = h; }).catch(onErr).finally(() => { busy[i] = false; });
+  }
+  function pushState(extra) {
+    const s = { page:PG.idx(), pageCount:PG.count() };
+    const key = JSON.stringify(s) + (extra ? JSON.stringify(extra) : '');
+    if (!extra && key === lastState) return;
+    lastState = key;
+    db.collection(COL).doc(STATE).set(Object.assign(s, extra || {}, { ts:Date.now() }), { merge:true }).catch(onErr);
+  }
+  function tick() {
+    if (!isAdmin() || !state || !state.active || typeof canvas === 'undefined' || !canvas) return;
+    uploadPage(PG.idx(), canvas);
+    pushState();
+  }
+  function syncAllPages() {
+    if (!isAdmin() || !state || !state.active) return;
+    PG.save();
+    PG.list().forEach((img, i) => { if (i !== PG.idx() && img) uploadPage(i, imgDataCanvas(img)); });
+    uploadPage(PG.idx(), canvas);
+    pushState();
+    // pages supprimées : on retire les documents en trop
+    Object.keys(livePages).map(Number).filter(n => n >= PG.count()).forEach(n => db.collection(COL).doc(pid(n)).delete().catch(() => {}));
+  }
+  document.addEventListener('cc:page', () => setTimeout(syncAllPages, 60));
+  function ensureTimer() {
+    const on = isAdmin() && state && state.active;
+    if (on && !timer) timer = setInterval(tick, 1500);
+    if (!on && timer) { clearInterval(timer); timer = null; }
+  }
+
+  async function startLive() {
+    if (!isAdmin()) return;
+    const title = ($('lvTitle') && $('lvTitle').value.trim()) || t('courseName') + ' — ' + new Date().toLocaleDateString('fr-FR');
+    const meet = $('lvMeet') ? $('lvMeet').value.trim() : '';
+    try {
+      const snap = await db.collection(COL).get();
+      const batch = db.batch();
+      snap.forEach(d => { if (d.id.indexOf('page_') === 0) batch.delete(d.ref); });
+      await batch.commit();
+      lastHash = {}; lastState = '';
+      await db.collection(COL).doc(STATE).set({ active:true, title, startedAt:Date.now(), page:PG.idx(), pageCount:PG.count(), pdf:null, ts:Date.now() });
+      if (meet) await db.collection(COL).doc('current').set({ url:meet, updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
+      state = Object.assign({}, state || {}, { active:true, title });
+      ensureTimer(); syncAllPages();
+      toast(t('started')); goBoard();
+    } catch (e) { onErr(e); if (!e || e.code !== 'permission-denied') toast('⚠️ ' + (e && e.message || e)); }
+  }
+  async function stopLive() {
+    if (!isAdmin()) return;
+    try { syncAllPages(); } catch (e) {}
+    await db.collection(COL).doc(STATE).set({ active:false, endedAt:Date.now() }, { merge:true }).catch(onErr);
+    state = Object.assign({}, state || {}, { active:false }); ensureTimer(); syncBoardTag(); render();
+    toast(t('stopped'));
+    if (confirm(t('publishQ'))) publishCourse();
+  }
+
+  /* ================= PDF du cours ================= */
+  function decorate(c, i, n, W, H) { if (typeof window.ccPageDecor === 'function') { try { window.ccPageDecor(c, i, n, W, H); } catch (e) {} } }
+  function buildPdf(sources, q) {
+    const W = 1400, H = 800;
+    const pdf = new window.jspdf.jsPDF({ orientation:'landscape', unit:'px', format:[W, H], compress:true });
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    sources.forEach((src, i) => {
+      if (i) pdf.addPage([W, H], 'landscape');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); if (src) x.drawImage(src, 0, 0, W, H);
+      decorate(x, i, sources.length, W, H);
+      pdf.addImage(c.toDataURL('image/jpeg', q || 0.8), 'JPEG', 0, 0, W, H);
+    });
+    return pdf;
+  }
+  const fileName = () => ((state && state.title) || t('courseName')).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80) + '.pdf';
+  function loadImg(url) { return new Promise(res => { if (!url) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; }); }
+  async function downloadCourse() {
+    if (!window.jspdf) { toast('⚠️ PDF'); return; }
+    const n = (state && state.pageCount) || Object.keys(livePages).length;
+    const imgs = await Promise.all(Array.from({ length:n }, (_, i) => loadImg(livePages[i] && livePages[i].img)));
+    buildPdf(imgs, 0.85).save(fileName());
+  }
+  function publishCourse() {
+    if (!window.jspdf) return;
+    PG.save();
+    const srcs = PG.list().map(img => img ? imgDataCanvas(img) : null);
+    let pdf = buildPdf(srcs, 0.6), uri = pdf.output('datauristring');
+    if (uri.length > 1000 * 1024) { pdf = buildPdf(srcs, 0.38); uri = pdf.output('datauristring'); }
+    if (uri.length > 1000 * 1024) { buildPdf(srcs, 0.8).save(fileName()); alert(t('tooBig')); return; }
+    // Dossiers existants (déduits des documents du site)
+    const paths = [...new Set((window.allFiles || []).map(f => f.path).filter(Boolean))];
+    const labeled = paths.map(p => { const f = (window.allFiles || []).find(x => x.path === p); return [p, (f && UI.whereOf(f.id)) || p]; }).sort((a, b) => a[1].localeCompare(b[1]));
+    if (!labeled.length) { pdf.save(fileName()); return; }
+    const choice = prompt(t('folder') + '\n' + labeled.map(([, l], i) => (i + 1) + ' = ' + l).join('\n'), '1');
+    const k = parseInt(choice, 10) - 1; if (!(k >= 0 && k < labeled.length)) return;
+    db.collection('files').add({
+      name:fileName(), path:labeled[k][0], size:(uri.length / 1048576).toFixed(2) + ' Mo', date:new Date().toLocaleDateString('fr-FR'),
+      downloads:0, views:0, ts:Date.now(), order:1e6, content:uri
+    }).then(() => toast(t('published') + ' « ' + labeled[k][1] + ' »')).catch(e => { onErr(e); alert(e.message || e); });
+  }
+
+  /* ================= Partage / import de PDF ================= */
+  let pdfjsP = null;
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return pdfjsP || (pdfjsP = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); } catch (e) { rej(e); } };
+      s.onerror = rej; document.head.appendChild(s);
+    }));
+  }
+  const dataUriToBytes = uri => { const b = atob(String(uri).split(',')[1]); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
+  async function importPdfBytes(bytes) {
+    const fit = UI.getP().lvFit || 'page';
+    try {
+      const lib = await loadPdfJs();
+      const doc = await lib.getDocument({ data:bytes }).promise;
+      const N = Math.min(doc.numPages, 40), W = canvas.width, H = canvas.height, out = [];
+      for (let p = 1; p <= N; p++) {
+        toast(t('importing').replace('{a}', p).replace('{b}', N));
+        const page = await doc.getPage(p), v1 = page.getViewport({ scale:1 });
+        const sc = fit === 'width' ? (W - 40) / v1.width : Math.min((W - 40) / v1.width, (H - 20) / v1.height);
+        const vp = page.getViewport({ scale:sc });
+        const pc = document.createElement('canvas'); pc.width = Math.ceil(vp.width); pc.height = Math.ceil(vp.height);
+        const px = pc.getContext('2d'); px.fillStyle = '#fff'; px.fillRect(0, 0, pc.width, pc.height);
+        await page.render({ canvasContext:px, viewport:vp }).promise;
+        const slices = fit === 'width' ? Math.ceil(pc.height / (H - 20)) : 1;
+        for (let s = 0; s < slices; s++) {
+          const bc = document.createElement('canvas'); bc.width = W; bc.height = H; const bx = bc.getContext('2d');
+          bx.fillStyle = '#fff'; bx.fillRect(0, 0, W, H);
+          if (fit === 'width') bx.drawImage(pc, 0, s * (H - 20), pc.width, Math.min(H - 20, pc.height - s * (H - 20)), 20, 10, pc.width, Math.min(H - 20, pc.height - s * (H - 20)));
+          else bx.drawImage(pc, (W - pc.width) / 2, (H - pc.height) / 2);
+          out.push(bx.getContext('2d').getImageData(0, 0, W, H));
+        }
+      }
+      PG.save();
+      const list = PG.list().slice(), i = PG.idx();
+      const curEmpty = !list[i] || !list[i].data.some((v, k) => (k & 3) === 3 && v);
+      const merged = curEmpty ? list.slice(0, i).concat(out, list.slice(i + 1)) : list.slice(0, i + 1).concat(out, list.slice(i + 1));
+      PG.setAll(merged, curEmpty ? i : i + 1);
+      toast(t('imported').replace('{n}', out.length));
+      goBoard();
+    } catch (e) { console.error(e); toast('⚠️ ' + t('loadErr')); }
+  }
+  async function importSiteFile(id) {
+    try { const d = await db.collection('files').doc(id).get(); if (!d.exists) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
+    catch (e) { onErr(e); toast('⚠️ ' + t('loadErr')); }
+  }
+  function sharePdf(id, name) {
+    db.collection(COL).doc(STATE).set({ pdf:id ? { id, name } : null, ts:Date.now() }, { merge:true }).then(() => { if (id) toast(t('sharedOk')); }).catch(onErr);
+    UI.closeAll();
+  }
+  $('ccPdfLocal').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader(); r.onload = () => { UI.closeAll(); importPdfBytes(new Uint8Array(r.result)); }; r.readAsArrayBuffer(f); e.target.value = '';
+  };
+  function renderPick(q) {
+    const nq = UI.norm(q || ''), fit = UI.getP().lvFit || 'page';
+    const files = (window.allFiles || []).filter(f => !nq || UI.norm(f.name).includes(nq)).slice(0, 60);
+    $('ccPdfPick').innerHTML = `<div class="cc-dhead"><h3>📄 ${t('pickT')}</h3><button class="cc-x" data-close>✕</button></div><div class="cc-dbody">
+      <div class="lv-bar" style="margin-top:0"><button class="lv-btn pri" id="pkLocal">${t('local')}</button></div>
+      <div class="cc-row"><span>${t('fitMode')}</span><div class="seg"><button data-pref="lvFit" data-val="page" class="${fit === 'page' ? 'on' : ''}">${t('fitPage')}</button><button data-pref="lvFit" data-val="width" class="${fit === 'width' ? 'on' : ''}">${t('fitWidth')}</button></div></div>
+      <input class="lv-in" id="pkQ" placeholder="${esc(t('pickSearch'))}" value="${esc(q || '')}" style="width:100%;margin:10px 0">
+      ${files.map(f => `<div class="pk-item"><div class="nm">📕 ${esc(f.name)}<small>${esc(UI.whereOf(f.id))}</small></div>
+        <button data-show="${esc(f.id)}" data-name="${esc(f.name)}">${t('showStudents')}</button><button data-imp="${esc(f.id)}">${t('toBoard')}</button></div>`).join('')}
+    </div>`;
+    $('pkLocal').onclick = () => $('ccPdfLocal').click();
+    const qi = $('pkQ'); qi.oninput = () => { const v = qi.value, pos = qi.selectionStart; renderPick(v); const n = $('pkQ'); n.focus(); n.setSelectionRange(pos, pos); };
+  }
+  $('ccPdfPick').addEventListener('click', e => {
+    const s = e.target.closest('[data-show]'); if (s) { sharePdf(s.dataset.show, s.dataset.name); return; }
+    const m = e.target.closest('[data-imp]'); if (m) importSiteFile(m.dataset.imp);
+    if (e.target.closest('[data-pref="lvFit"]')) setTimeout(() => renderPick($('pkQ') ? $('pkQ').value : ''), 0);
+  });
+  function openPick() { renderPick(''); UI.openDrawer('ccPdfPick'); }
+
+  /* ================= Carte « Salle de cours en direct » ================= */
+  let frameUrl = null; const draft = { title:null, meet:'' };
+  async function openShared() {
+    const p = state && state.pdf; if (!p) return;
+    try {
+      const d = await db.collection('files').doc(p.id).get(); if (!d.exists) return;
+      const bytes = dataUriToBytes(d.data().content);
+      if (frameUrl) URL.revokeObjectURL(frameUrl);
+      frameUrl = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+      const fr = $('lvFrame'); fr.src = frameUrl; fr.classList.add('show');
+    } catch (e) { toast(e && e.code === 'permission-denied' ? '🔒' : '⚠️ ' + t('loadErr')); }
+  }
+  function render() {
+    const vv = $('visioView'); if (!vv) return;
+    let card = $('ccLiveCard');
+    if (!card) {
+      card = document.createElement('div'); card.id = 'ccLiveCard';
+      card.innerHTML = '<div id="lvTop"></div><iframe class="lv-frame" id="lvFrame" title="PDF"></iframe><div id="lvBottom"></div>';
+      vv.insertBefore(card, vv.firstChild);
+    }
+    // Ne pas reconstruire les champs pendant que le professeur tape
+    const ae = document.activeElement;
+    if (ae && (ae.id === 'lvTitle' || ae.id === 'lvMeet') && !(state && state.active)) return;
+    const st = state || {}, active = !!st.active, n = Math.max(st.pageCount || 0, Object.keys(livePages).length ? Math.max(...Object.keys(livePages).map(Number)) + 1 : 0);
+    const has = n > 0;
+    viewIdx = Math.max(0, Math.min(viewIdx, Math.max(0, n - 1)));
+    const frameOpen = $('lvFrame') && $('lvFrame').classList.contains('show');
+    const pill = active ? `<span class="lv-pill"><span class="d"></span>${t('live')}</span>` : `<span class="lv-pill off">${has ? t('ended') : t('none')}</span>`;
+    let html = `<h4>🎓 ${esc(st.title || t('room'))} ${pill}</h4>`;
+    if (isAdmin()) {
+      html += `<div class="lv-bar"><input class="lv-in" id="lvTitle" placeholder="${esc(t('titlePh'))}" value="${esc(active ? (st.title || '') : (draft.title != null ? draft.title : (st.title || '')))}" ${active ? 'disabled' : ''}>
+        <input class="lv-in" id="lvMeet" placeholder="${esc(t('meetPh'))}" value="${esc(draft.meet || '')}" ${active ? 'disabled' : ''}></div>
+        <div class="lv-bar">${active ? `<button class="lv-btn red" id="lvStop">${t('stop')}</button>` : `<button class="lv-btn pri" id="lvStart">${t('start')}</button>`}
+        <button class="lv-btn" id="lvBoard">${t('goBoard')}</button><button class="lv-btn" id="lvShare">${t('share')}</button>
+        ${has ? `<button class="lv-btn" id="lvDl">${t('dlCourse')}</button>` : ''}</div>
+        <p class="lv-note">${t('teacherNote')}</p>`;
+    }
+    if (st.pdf) html += `<div class="lv-doc"><span>📄 ${t('pdfShared')} : ${esc(st.pdf.name)}</span>
+      <button class="lv-btn" id="lvOpen">${frameOpen ? t('close') : t('open')}</button><button class="lv-btn" id="lvPdfDl">${t('dl')}</button>
+      ${isAdmin() ? `<button class="lv-btn" id="lvUnshare">${t('unshare')}</button>` : ''}</div>`;
+    $('lvTop').innerHTML = html; html = '';
+    if (has || active) {
+      const cur = livePages[viewIdx];
+      html += `<div class="lv-bar" style="margin-bottom:6px"><button class="lv-btn" id="lvPrev" ${viewIdx <= 0 ? 'disabled' : ''}>◀</button>
+        <b style="min-width:84px;text-align:center">${t('page')} ${viewIdx + 1} / ${Math.max(n, 1)}</b>
+        <button class="lv-btn" id="lvNext" ${viewIdx >= n - 1 ? 'disabled' : ''}>▶</button>
+        ${!isAdmin() ? `<label style="display:inline-flex;gap:6px;align-items:center;font-weight:700;font-size:13px;color:var(--gris)"><input type="checkbox" id="lvFollow" ${follow ? 'checked' : ''}> ${t('follow')}</label>` : ''}
+        <span style="flex:1"></span><button class="lv-btn" id="lvFull">${t('full')}</button>
+        ${cur ? `<button class="lv-btn" id="lvPng">${t('dlPage')}</button>` : ''}${!isAdmin() && has ? `<button class="lv-btn pri" id="lvDl">${t('dlCourse')}</button>` : ''}</div>
+        <div class="lv-pages">${Array.from({ length:n }, (_, i) => `<button data-lp="${i}" class="${i === viewIdx ? 'on' : ''} ${active && i === st.page ? 'prof' : ''}" title="${active && i === st.page ? esc(t('profHere')) : ''}">${i + 1}</button>`).join('')}</div>
+        <div class="lv-stage" id="lvStage">${cur ? `<img src="${cur.img}" alt="${t('page')} ${viewIdx + 1}">` : `<div class="ph">${t('waiting')}</div>`}<span class="num">${t('page')} ${viewIdx + 1} / ${Math.max(n, 1)}</span></div>
+        ${!isAdmin() ? `<p class="lv-note">${t('studentNote')}</p>` : ''}`;
+    }
+    $('lvBottom').innerHTML = html;
+    if (!st.pdf && frameOpen) { $('lvFrame').classList.remove('show'); $('lvFrame').removeAttribute('src'); }
+    const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+    if ($('lvTitle')) $('lvTitle').oninput = e => { draft.title = e.target.value; };
+    if ($('lvMeet')) $('lvMeet').oninput = e => { draft.meet = e.target.value; };
+    on('lvStart', startLive); on('lvStop', stopLive); on('lvBoard', goBoard); on('lvShare', openPick);
+    on('lvDl', downloadCourse);
+    on('lvOpen', () => { const fr = $('lvFrame'); if (fr.classList.contains('show')) { fr.classList.remove('show'); fr.removeAttribute('src'); render(); } else openShared().then(render); });
+    on('lvPdfDl', () => { try { downloadPdf(st.pdf.id, st.pdf.name); } catch (e) {} });
+    on('lvUnshare', () => sharePdf(null));
+    on('lvPrev', () => { follow = false; viewIdx--; render(); });
+    on('lvNext', () => { follow = false; viewIdx++; render(); });
+    on('lvFull', () => { const s = $('lvStage'); if (document.fullscreenElement) document.exitFullscreen(); else if (s && s.requestFullscreen) s.requestFullscreen(); });
+    on('lvPng', () => { const c = livePages[viewIdx]; if (!c) return; const a = document.createElement('a'); a.href = c.img; a.download = fileName().replace('.pdf', '') + '-page-' + (viewIdx + 1) + (c.img.indexOf('image/webp') > 0 ? '.webp' : '.jpg'); a.click(); });
+    const fl = $('lvFollow'); if (fl) fl.onchange = () => { follow = fl.checked; if (follow && state) viewIdx = state.page || 0; render(); };
+    card.querySelectorAll('[data-lp]').forEach(b => b.onclick = () => { follow = false; viewIdx = +b.dataset.lp; render(); });
+    ensureTimer();
+  }
+  // Flèches du clavier côté élève, dans la salle live
+  document.addEventListener('keydown', e => {
+    if (typeof currentView === 'undefined' || currentView !== 'visio') return;
+    const el = e.target; if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
+    if (e.key === 'ArrowRight' && $('lvNext') && !$('lvNext').disabled) $('lvNext').click();
+    if (e.key === 'ArrowLeft' && $('lvPrev') && !$('lvPrev').disabled) $('lvPrev').click();
+  });
+
+  /* ================= Sur le tableau (professeur) ================= */
+  function buildBoard() {
+    const bt = document.querySelector('.board-tools'); if (!bt || $('ccBoardRow5')) return;
+    const r = document.createElement('div'); r.id = 'ccBoardRow5';
+    r.innerHTML = `<button class="bt-tool" id="b8Live"></button><button class="bt-tool" id="b8Pdf"></button><button class="bt-tool" id="b8Room">🎓 <span></span></button>`;
+    bt.appendChild(r);
+    $('b8Live').onclick = () => (state && state.active) ? stopLive() : startLive();
+    $('b8Pdf').onclick = openPick;
+    $('b8Room').onclick = goVisio;
+    const sb = $('ccSizeBar');
+    if (sb && !$('ccLiveTag')) { const tag = document.createElement('span'); tag.id = 'ccLiveTag'; tag.innerHTML = `<span class="d"></span><span id="ccLiveTagT"></span>`; sb.insertBefore(tag, sb.firstChild); }
+    syncBoardTag();
+  }
+  function syncBoardTag() {
+    const admin = isAdmin(), active = !!(state && state.active);
+    const r = $('ccBoardRow5'); if (r) r.style.display = admin ? '' : 'none';
+    const b = $('b8Live'); if (b) { b.textContent = active ? t('stop') : t('start'); b.classList.toggle('on', active); b.style.background = active ? '#dc2626' : ''; b.style.color = active ? '#fff' : ''; b.title = t('boardLive'); }
+    const p = $('b8Pdf'); if (p) p.textContent = t('pdfImport');
+    const rm = $('b8Room'); if (rm) rm.querySelector('span').textContent = t('room');
+    const tag = $('ccLiveTag'); if (tag) { tag.classList.toggle('show', admin && active); $('ccLiveTagT').textContent = t('live') + ' · ' + t('page') + ' ' + (PG.idx() + 1); }
+  }
+  document.addEventListener('cc:page', syncBoardTag);
+
+  /* ================= Démarrage ================= */
+  if (typeof loginAs === 'function') { const _la = loginAs; window.loginAs = function () { const r = _la.apply(this, arguments); setTimeout(() => { listen(); render(); syncBoardTag(); }, 60); return r; }; }
+  if (typeof toggleLang === 'function') { const _tl = toggleLang; window.toggleLang = function () { const r = _tl.apply(this, arguments); render(); syncBoardTag(); return r; }; }
+  const prevActs = window.ccExtraActions;
+  window.ccExtraActions = () => (prevActs ? prevActs() : []).concat([
+    { ic:'🎓', l:t('room'), run:goVisio },
+    { ic:'📄', l:t('pdfImport') + ' / ' + t('share'), run:openPick }
+  ]);
+  function init8() { buildBoard(); if (typeof currentUser !== 'undefined' && currentUser) { listen(); render(); } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init8); else init8();
 })();
 </script>
 </body>
