@@ -6021,5 +6021,137 @@ body.pdf-dark #previewFrame { filter:invert(.9) hue-rotate(180deg); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init4); else init4();
 })();
 </script>
+
+<!-- =====================================================================
+     V5 — TABLEAU BLANC GRAND FORMAT : pleine largeur, mode « tout l'écran »,
+     flèches pour agrandir / réduire, ajustement automatique à l'écran
+     ===================================================================== -->
+<style>
+body.on-board .files-wrap { max-width:none; padding:0 18px; }
+#ccSizeBar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; padding:8px 10px; background:var(--carte); border:1px solid var(--bord); border-radius:14px; box-shadow:var(--ombre); }
+#ccSizeBar .sz-btn { height:42px; min-width:46px; padding:0 14px; border-radius:11px; border:1px solid var(--bord); background:var(--surf2); color:var(--texte); font-weight:800; font-size:16px; cursor:pointer; }
+#ccSizeBar .sz-btn:hover { border-color:var(--bleu2); color:var(--bleu2); }
+#ccSizeBar .sz-btn.pri { background:var(--bleu2); color:#fff; border-color:var(--bleu2); }
+#ccSizeBar .sz-arrow { font-size:22px; min-width:52px; }
+#ccSizeBar .sz-val { min-width:62px; text-align:center; font-weight:800; font-size:15px; color:var(--titre); font-variant-numeric:tabular-nums; }
+#ccSizeBar .sz-sp { flex:1; }
+#ccBoardWrap { overflow:auto; border-radius:14px; max-width:100%; -webkit-overflow-scrolling:touch; }
+#ccBoardWrap #board { margin:0 auto; }
+/* Mode tout l'écran : seul le tableau reste */
+body.board-max header, body.board-max aside.nav, body.board-max .sidebar-resizer, body.board-max aside.stats, body.board-max aside.stats.show,
+body.board-max .banner, body.board-max #zoomWidget, body.board-max .board-note, body.board-max #ccTop, body.board-max #ccTimer { display:none !important; }
+body.board-max .files-wrap { margin-top:8px; padding:0 10px; }
+body.board-max .content { padding-bottom:8px; }
+body.board-max.tools-min .board-tools { display:none !important; }
+body.board-max #ccSizeBar { position:sticky; top:6px; z-index:20; }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  const UI = window.ccUI; if (!UI) return;
+  const $ = id => document.getElementById(id);
+  const L = () => (typeof lang !== 'undefined' && lang === 'en') ? 'en' : 'fr';
+  const TX = {
+    fr:{ smaller:'Réduire le tableau', bigger:'Agrandir le tableau', fit:'Ajuster à l’écran', full:'Tout l’écran', exitFull:'Quitter le plein écran', tools:'Outils', hide:'Masquer les outils', show:'Afficher les outils', w100:'Pleine largeur' },
+    en:{ smaller:'Shrink the board', bigger:'Enlarge the board', fit:'Fit to screen', full:'Full screen', exitFull:'Exit full screen', tools:'Tools', hide:'Hide tools', show:'Show tools', w100:'Full width' }
+  };
+  const t = k => TX[L()][k];
+  const KEY = 'tpm_bscale';
+  let scale = 100;
+  try { scale = +localStorage.getItem(KEY) || 100; } catch (e) {}
+  const MIN = 40, MAX = 300, STEP = 10;
+  const RATIO = () => { const c = $('board'); return c ? c.height / c.width : 800 / 1400; };
+
+  function applyScale() {
+    const c = $('board'), w = $('ccBoardWrap'); if (!c || !w) return;
+    scale = Math.max(MIN, Math.min(MAX, Math.round(scale)));
+    c.style.width = scale + '%';
+    c.style.maxWidth = 'none';
+    const v = $('szVal'); if (v) v.textContent = scale + '%';
+    try { localStorage.setItem(KEY, scale); } catch (e) {}
+  }
+  function bigger() { scale += STEP; applyScale(); }
+  function smaller() { scale -= STEP; applyScale(); }
+  // Ajuste pour que tout le tableau tienne dans la hauteur visible
+  function fit() {
+    const w = $('ccBoardWrap'); if (!w) return;
+    const top = w.getBoundingClientRect().top;
+    const availH = window.innerHeight - Math.max(0, top) - 14;
+    const availW = w.clientWidth || 1;
+    const wantW = Math.min(availW, availH / RATIO());
+    scale = Math.max(MIN, Math.floor(wantW / availW * 100));
+    applyScale();
+  }
+  function setMax(on) {
+    document.body.classList.toggle('board-max', on);
+    if (!on) document.body.classList.remove('tools-min');
+    const el = document.documentElement;
+    try {
+      if (on && !document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen || function () {}).call(el);
+      if (!on && (document.fullscreenElement || document.webkitFullscreenElement)) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } catch (e) {}
+    setTimeout(fit, on ? 350 : 60);
+    labels();
+  }
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('board-max')) { document.body.classList.remove('board-max', 'tools-min'); labels(); setTimeout(fit, 60); } });
+
+  function build() {
+    const c = $('board'); if (!c || $('ccBoardWrap')) return;
+    const wrap = document.createElement('div'); wrap.id = 'ccBoardWrap';
+    c.parentNode.insertBefore(wrap, c); wrap.appendChild(c);
+    const bar = document.createElement('div'); bar.id = 'ccSizeBar';
+    bar.innerHTML = `<button class="sz-btn sz-arrow" id="szDown">▼</button><span class="sz-val" id="szVal">100%</span>
+      <button class="sz-btn sz-arrow" id="szUp">▲</button>
+      <button class="sz-btn" id="szW">↔ <span></span></button><button class="sz-btn" id="szFit">⤢ <span></span></button>
+      <span class="sz-sp"></span><button class="sz-btn" id="szTools">☰ <span></span></button><button class="sz-btn pri" id="szMax">⛶ <span></span></button>`;
+    wrap.parentNode.insertBefore(bar, wrap);
+    $('szUp').onclick = bigger; $('szDown').onclick = smaller;
+    $('szW').onclick = () => { scale = 100; applyScale(); };
+    $('szFit').onclick = fit;
+    $('szMax').onclick = () => setMax(!document.body.classList.contains('board-max'));
+    $('szTools').onclick = () => { document.body.classList.toggle('tools-min'); labels(); setTimeout(fit, 30); };
+    applyScale(); labels();
+  }
+  function labels() {
+    const s = (id, v, title) => { const b = $(id); if (!b) return; const sp = b.querySelector('span'); if (sp) sp.textContent = v; b.title = title || v; };
+    const max = document.body.classList.contains('board-max'), tm = document.body.classList.contains('tools-min');
+    s('szUp', null, t('bigger') + ' (+)'); s('szDown', null, t('smaller') + ' (−)');
+    s('szW', t('w100')); s('szFit', t('fit') + '', t('fit') + ' (0)');
+    s('szMax', max ? t('exitFull') : t('full'));
+    s('szTools', tm ? t('show') : t('hide'));
+    const tb = $('szTools'); if (tb) tb.style.display = max ? '' : 'none';
+  }
+  // Classe « on-board » : le tableau prend toute la largeur disponible
+  function syncView() {
+    const bv = $('boardView'); const on = !!bv && getComputedStyle(bv).display !== 'none';
+    document.body.classList.toggle('on-board', on);
+    if (!on && document.body.classList.contains('board-max')) setMax(false);
+  }
+  const mo = new MutationObserver(syncView);
+  if ($('boardView')) mo.observe($('boardView'), { attributes:true, attributeFilter:['style', 'class'] });
+
+  // Raccourcis : + / − / 0 sur le tableau
+  document.addEventListener('keydown', e => {
+    const el = e.target; if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (typeof currentView === 'undefined' || currentView !== 'board') return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); bigger(); }
+    else if (e.key === '-' || e.key === '_') { e.preventDefault(); smaller(); }
+    else if (e.key === '0') { e.preventDefault(); fit(); }
+  });
+  const prevHelp = window.ccExtraHelp;
+  window.ccExtraHelp = () => (prevHelp ? prevHelp() : []).concat([['#' + (L() === 'en' ? 'Board: enlarge / shrink / fit' : 'Tableau : agrandir / réduire / ajuster'), '+ / − / 0']]);
+  const prevActs = window.ccExtraActions;
+  window.ccExtraActions = () => (prevActs ? prevActs() : []).concat([
+    { ic:'⛶', l:(L() === 'en' ? 'Whiteboard full screen' : 'Tableau blanc en plein écran'), run:() => { try { handleSpecialTab('board_tab', trNav('✍️ TABLEAU BLANC')); } catch (e) {} setTimeout(() => setMax(true), 80); } }
+  ]);
+  if (typeof toggleLang === 'function') { const _tl = toggleLang; window.toggleLang = function () { const r = _tl.apply(this, arguments); labels(); return r; }; }
+  window.addEventListener('resize', () => { if (document.body.classList.contains('board-max')) fit(); });
+
+  function init5() { build(); syncView(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init5); else init5();
+})();
+</script>
 </body>
 </html>
