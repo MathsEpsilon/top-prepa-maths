@@ -7158,5 +7158,476 @@ body.pg-noarrows .pg-arrow { display:none; }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init8); else init8();
 })();
 </script>
+
+<!-- =====================================================================
+     V10 — ACCUEIL EN GRANDES ICÔNES
+     Classe → Matière → Type de document, avec de grandes tuiles colorées,
+     compteurs, badges « nouveau », fil d'Ariane et mode « icônes seules ».
+     ===================================================================== -->
+<style>
+#homeView { display:none; padding-bottom:20px; }
+body.home-on .files-wrap { max-width:none !important; padding:0 28px; }
+body.nav-icons .files-wrap { max-width:1400px; }
+.hm-tag { display:inline-block; font-style:normal; font-size:11.5px; font-weight:800; letter-spacing:.04em; background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.3); border-radius:999px; padding:2px 9px; margin-bottom:6px; }
+.hm-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:6px 0 18px; }
+.hm-head h3 { font-family:'Spectral', Georgia, serif; font-size:26px; color:var(--titre); flex:1; min-width:200px; }
+.hm-back { height:46px; padding:0 18px; border-radius:13px; border:1px solid var(--bord); background:var(--carte); color:var(--texte); font-weight:800; font-size:15px; cursor:pointer; box-shadow:var(--ombre); }
+.hm-back:hover { border-color:var(--bleu2); color:var(--bleu2); }
+.hm-crumbs { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:14px; font-weight:700; color:var(--gris); margin-bottom:6px; }
+.hm-crumbs a { color:var(--bleu2); cursor:pointer; text-decoration:none; }
+.hm-crumbs a:hover { text-decoration:underline; }
+.hm-sec { font-size:13px; font-weight:800; letter-spacing:.08em; color:var(--gris); text-transform:uppercase; margin:22px 0 10px; }
+.hm-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(var(--tile, 230px), 1fr)); gap:18px; }
+body.tiles-xl .hm-grid { --tile:270px; } body.tiles-s .hm-grid { --tile:170px; }
+.hm-tile { position:relative; border:none; border-radius:22px; padding:22px 18px 18px; min-height:190px; cursor:pointer; text-align:left; color:#fff; overflow:hidden;
+  display:flex; flex-direction:column; justify-content:space-between; gap:10px; box-shadow:0 10px 26px -12px rgba(15,42,92,.55); transition:transform .15s, box-shadow .15s;
+  background:linear-gradient(140deg, var(--c1), var(--c2)); }
+body.tiles-xl .hm-tile { min-height:230px; } body.tiles-s .hm-tile { min-height:150px; }
+.hm-tile:hover { transform:translateY(-4px); box-shadow:0 18px 34px -14px rgba(15,42,92,.6); }
+.hm-tile:active { transform:translateY(-1px); }
+.hm-tile::after { content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px); background-size:22px 22px; }
+.hm-ic { position:relative; z-index:1; width:84px; height:84px; border-radius:24px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3);
+  display:flex; align-items:center; justify-content:center; font-family:'Spectral', Georgia, serif; font-size:48px; font-weight:700; line-height:1; }
+body.tiles-xl .hm-ic { width:104px; height:104px; font-size:60px; } body.tiles-s .hm-ic { width:62px; height:62px; font-size:34px; border-radius:18px; }
+.hm-ic.emo { font-family:'Segoe UI Emoji', 'Apple Color Emoji', sans-serif; font-size:44px; }
+.hm-tt { position:relative; z-index:1; }
+.hm-tt b { display:block; font-size:20px; font-weight:800; line-height:1.2; }
+body.tiles-xl .hm-tt b { font-size:23px; }
+.hm-tt small { display:block; font-size:13px; font-weight:600; opacity:.88; margin-top:4px; }
+.hm-badge { position:absolute; top:14px; right:14px; z-index:2; background:#fff; color:#dc2626; font-weight:800; font-size:12px; border-radius:999px; padding:4px 10px; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+.hm-lock { position:absolute; top:14px; right:14px; z-index:2; font-size:18px; }
+.hm-rec { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:10px; }
+.hm-rec button { display:flex; align-items:center; gap:10px; text-align:left; border:1px solid var(--bord); background:var(--carte); color:var(--texte); border-radius:14px; padding:12px 14px; cursor:pointer; box-shadow:var(--ombre); }
+.hm-rec button:hover { border-color:var(--bleu2); }
+.hm-rec b { display:block; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hm-rec small { display:block; font-size:11.5px; color:var(--gris); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hm-rec .nm { min-width:0; flex:1; }
+/* Fil d'Ariane au-dessus des documents */
+@media (max-width:1450px) { #ccMathBtn { display:none; } }
+#ccCrumbBar { display:none; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 12px; }
+body.has-home #ccCrumbBar { display:flex; }
+#ccCrumbBar .hm-back { height:38px; font-size:13.5px; padding:0 14px; }
+/* Mode « icônes seules » : menu latéral masqué */
+body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !important; }
+@media (max-width:860px) { .hm-grid { --tile:150px; } .hm-tile { min-height:150px; padding:16px 14px; } .hm-ic { width:58px; height:58px; font-size:32px; } .hm-tt b { font-size:16px; } }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  const UI = window.ccUI; if (!UI) return;
+  const $ = id => document.getElementById(id);
+  const esc = UI.esc;
+  const L = () => (typeof lang !== 'undefined' && lang === 'en') ? 'en' : 'fr';
+  const P = () => UI.getP();
+  const opt = (k, d) => (P()[k] === undefined ? d : P()[k]);
+  const tr = s => { try { return trNav(s); } catch (e) { return s; } };
+  const TX = {
+    fr:{ home:'Accueil', hello:'Bonjour {n} 👋', choose:'Choisissez votre classe', prepa:'Classes préparatoires', y1:'1ʳᵉ année', y2:'2ᵉ année', other:'Autres espaces et outils', tools:'Outils',
+      docs:'{n} document(s)', news:'{n} nouveau(x)', back:'← Retour', subj:'Choisissez la matière', type:'Choisissez le type de document', resume:'Reprendre là où vous étiez',
+      board:'Tableau blanc', live:'Séance live', boardS:'Écrire, dessiner, plusieurs pages', liveS:'Cours en direct et PDF', licence:'Licence', licenceS:'Mathématiques',
+      bac:'Baccalauréat', bacS:'5 filières', divers:'Divers cours', diversS:'Analyse, algèbre, ODE…', homeStart:'Ouvrir l’accueil en grandes icônes au démarrage',
+      navMode:'Navigation', navBoth:'Icônes + menu', navIcons:'Icônes seules', tileSize:'Taille des icônes', s:'Petites', m:'Moyennes', xl:'Grandes', toHome:'🏠 Accueil' },
+    en:{ home:'Home', hello:'Hello {n} 👋', choose:'Choose your class', prepa:'Preparatory classes', y1:'1st year', y2:'2nd year', other:'Other spaces and tools', tools:'Tools',
+      docs:'{n} document(s)', news:'{n} new', back:'← Back', subj:'Choose the subject', type:'Choose the document type', resume:'Pick up where you left off',
+      board:'Whiteboard', live:'Live session', boardS:'Write, draw, several pages', liveS:'Live lessons and PDFs', licence:'Bachelor', licenceS:'Mathematics',
+      bac:'Baccalaureate', bacS:'5 tracks', divers:'Other courses', diversS:'Analysis, algebra, ODE…', homeStart:'Open the big-icon home page at startup',
+      navMode:'Navigation', navBoth:'Icons + menu', navIcons:'Icons only', tileSize:'Icon size', s:'Small', m:'Medium', xl:'Large', toHome:'🏠 Home' }
+  };
+  const t = k => TX[L()][k];
+
+  /* ---------- Apparence des tuiles ---------- */
+  const LOOK = {
+    p_classe_pt:{ ic:'∫', c:['#1e40af', '#3b82f6'] }, p_classe_m:{ ic:'Σ', c:['#5b21b6', '#8b5cf6'] },
+    d_classe_spst:{ ic:'∂', c:['#065f46', '#10b981'] }, d_classe_sm:{ ic:'∞', c:['#9a3412', '#f97316'] },
+    licence:{ ic:'ℝ', c:['#9d174d', '#ec4899'] }, divers_main:{ ic:'∇', c:['#155e75', '#06b6d4'] }, bac_main:{ ic:'π', c:['#92400e', '#f59e0b'] },
+    board_tab:{ ic:'✍️', emo:1, c:['#1e293b', '#475569'] }, visio_tab:{ ic:'🎥', emo:1, c:['#991b1b', '#ef4444'] }
+  };
+  const SUBLOOK = {
+    'ANALYSE':['∫', '#1d4ed8', '#60a5fa'], 'ALGÈBRE':['λ', '#6d28d9', '#a78bfa'], 'GÉOMÉTRIE':['△', '#047857', '#34d399'],
+    'Bac Économie et Gestion':['📈', '#b45309', '#fbbf24', 1], "Bac Sciences de l'Informatique":['💻', '#0e7490', '#22d3ee', 1], 'Bac Sciences Techniques':['⚙️', '#334155', '#94a3b8', 1],
+    'Bac Sciences Expérimentales':['🧪', '#15803d', '#4ade80', 1], 'Bac Mathématiques':['π', '#1e40af', '#60a5fa'],
+    'ODE':['y′', '#0f766e', '#2dd4bf'], 'Measure theory':['μ', '#7c2d12', '#fb923c'], 'Integration':['∫', '#1e3a8a', '#60a5fa'], 'Calculus':['∂', '#581c87', '#c084fc'],
+    'Numerical analysis':['≈', '#0c4a6e', '#38bdf8'], 'Differential equations':['dy', '#831843', '#f472b6'], 'Linear Algebra':['λ', '#3730a3', '#818cf8']
+  };
+  const LEAFLOOK = {
+    'Cours':['📘', '#1d4ed8', '#60a5fa'], 'Séries corrigées':['✅', '#047857', '#34d399'], 'TD':['✏️', '#7c3aed', '#c4b5fd'], 'Devoirs corrigés':['📝', '#b45309', '#fbbf24'],
+    'Résumé de cours':['📒', '#1d4ed8', '#60a5fa'], 'Exercices corrigés':['✅', '#047857', '#34d399'], 'Problème corrigé':['🧩', '#7c3aed', '#c4b5fd'], 'Ancien sujet corrigé':['🗂️', '#b45309', '#fbbf24'],
+    'Homework':['🏠', '#be185d', '#f9a8d4']
+  };
+
+  /* ---------- Comptage des documents ---------- */
+  function counts() {
+    const c = { f:{}, s:{}, l:{}, nf:{}, ns:{} };
+    (window.allFiles || []).forEach(file => {
+      let loc = null; try { loc = parsePath(file.path); } catch (e) {}
+      if (!loc) return;
+      const isNew = (() => { try { return isNewFile(file); } catch (e) { return false; } })();
+      const k1 = loc.folder, k2 = k1 + '|' + loc.sub, k3 = k2 + '|' + loc.leaf;
+      c.f[k1] = (c.f[k1] || 0) + 1; c.s[k2] = (c.s[k2] || 0) + 1; c.l[k3] = (c.l[k3] || 0) + 1;
+      if (isNew) { c.nf[k1] = (c.nf[k1] || 0) + 1; c.ns[k2] = (c.ns[k2] || 0) + 1; }
+    });
+    return c;
+  }
+  const userGroup = () => (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.group || 'prepa') : 'prepa';
+  const allowed = it => !it.groups || it.groups.includes(userGroup()) || (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin');
+  const leavesFor = fid => fid.includes('divers_main') ? DIVERS_CATEGORIES : fid.includes('bac_main') ? BAC_CATEGORIES : SUB_CATEGORIES;
+
+  /* ---------- Vue d'accueil ---------- */
+  let level = { folder:null, sub:null };
+  function tile({ ic, emo, c1, c2, title, sub, badge, onclick, id, tag }) {
+    return `<button class="hm-tile" style="--c1:${c1};--c2:${c2}" data-hm="${esc(id)}">
+      ${badge ? `<span class="hm-badge">${esc(badge)}</span>` : ''}
+      <span class="hm-ic ${emo ? 'emo' : ''}">${esc(ic)}</span>
+      <span class="hm-tt">${tag ? `<em class="hm-tag">${esc(tag)}</em>` : ''}<b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
+  }
+  const actions = {};
+  function renderHome() {
+    const hv = $('homeView'); if (!hv) return;
+    const C = counts(); let html = '';
+    Object.keys(actions).forEach(k => delete actions[k]);
+    const docs = n => t('docs').replace('{n}', n || 0);
+    const newB = n => n ? t('news').replace('{n}', n) : '';
+    const crumbs = [`<a data-crumb="root">🏠 ${t('home')}</a>`];
+
+    if (!level.folder) {
+      const name = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? String(currentUser.name).split(' ')[0] : '';
+      html += `<div class="hm-head"><h3>${esc(name ? t('hello').replace('{n}', name) : t('home'))}</h3></div>`;
+      // Reprendre
+      try {
+        const rec = JSON.parse(localStorage.getItem('tpm_rec_' + ((typeof currentUser !== 'undefined' && currentUser) ? currentUser.username : 'anon')) || '[]').slice(0, 4);
+        if (rec.length) {
+          html += `<div class="hm-sec">🕘 ${t('resume')}</div><div class="hm-rec">${rec.map((r, i) => { actions['rec' + i] = () => UI.openDoc(r.id, r.name);
+            return `<button data-hm="rec${i}"><span style="font-size:24px">📕</span><span class="nm"><b>${esc(r.name)}</b><small>${esc(UI.whereOf(r.id))}</small></span></button>`; }).join('')}</div>`;
+        }
+      } catch (e) {}
+      const sections = [];
+      let curSec = null;
+      const otherSec = () => { let o = sections.find(x => x.other); if (!o) { o = { title:t('other'), items:[], other:true }; sections.push(o); } return o; };
+      STRUCTURE.forEach(it => {
+        if (!allowed(it)) return;
+        if (it.type === 'year') {
+          let pre = sections.find(x => x.prepa); if (!pre) { pre = { title:t('prepa'), items:[], prepa:true }; sections.push(pre); }
+          pre.year = /DEUX|SECOND/i.test(it.txt) ? t('y2') : t('y1'); curSec = pre; return;
+        }
+        if (it.type === 'title' && !it.id) { if (/Baccal/.test(it.txt)) curSec = otherSec(); return; }
+        if (it.type === 'title' && it.id) {
+          if (it.id === 'licence') { curSec = otherSec(); curSec.items.push({ id:'licence', title:t('licence'), sub:t('licenceS') + ' · ' + docs(C.f.licence), badge:newB(C.nf.licence) }); return; }
+          const tools = otherSec();
+          tools.items.push({ id:it.id, title:it.id === 'board_tab' ? t('board') : t('live'), sub:it.id === 'board_tab' ? t('boardS') : t('liveS'), special:it });
+          return;
+        }
+        if (it.type === 'folder') {
+          if (!curSec) curSec = otherSec();
+          const title = it.id === 'bac_main' ? t('bac') : it.id === 'divers_main' ? t('divers') : tr(it.txt);
+          const sub = (it.id === 'bac_main' ? t('bacS') : it.id === 'divers_main' ? t('diversS') : (it.sub || []).map(tr).join(' · ')) + ' · ' + docs(C.f[it.id]);
+          curSec.items.push({ id:it.id, title, sub, badge:newB(C.nf[it.id]), folder:it, tag:curSec.prepa ? curSec.year : '' });
+        }
+      });
+      sections.forEach(sec => {
+        if (!sec.items.length) return;
+        html += `<div class="hm-sec">${esc(sec.title)}</div><div class="hm-grid">` + sec.items.map(it => {
+          const lk = LOOK[it.id] || { ic:'📁', emo:1, c:['#334155', '#64748b'] };
+          actions[it.id] = it.special ? () => { try { handleSpecialTab(it.special.id, tr(it.special.txt)); } catch (e) {} }
+            : it.id === 'licence' ? () => { try { selectCategory('licence', '', ''); } catch (e) {} }
+            : () => { level = { folder:it.folder, sub:null }; renderHome(); window.scrollTo({ top:0 }); };
+          return tile({ ic:lk.ic, emo:lk.emo, c1:lk.c[0], c2:lk.c[1], title:it.title, sub:it.sub, badge:it.badge, id:it.id, tag:it.tag });
+        }).join('') + `</div>`;
+      });
+    } else if (!level.sub) {
+      const f = level.folder, lk = LOOK[f.id] || { c:['#334155', '#64748b'] };
+      crumbs.push(`<span>›</span><b>${esc(tr(f.txt))}</b>`);
+      html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="root">${t('back')}</button><h3>${esc(tr(f.txt))} — ${t('subj')}</h3></div><div class="hm-grid">` +
+        (f.sub || []).map((s, i) => {
+          const sl = SUBLOOK[s] || ['📁', lk.c[0], lk.c[1], 1], key = f.id + '|' + s;
+          actions['s' + i] = () => {
+            if (f.id.includes('saudi')) { try { selectCategory(f.id, s, s); } catch (e) {} return; }
+            level = { folder:f, sub:s }; renderHome(); window.scrollTo({ top:0 });
+          };
+          return tile({ ic:sl[0], emo:sl[3], c1:sl[1], c2:sl[2], title:tr(s), sub:docs(C.s[key]), badge:newB(C.ns[key]), id:'s' + i });
+        }).join('') + `</div>`;
+    } else {
+      const f = level.folder, s = level.sub;
+      crumbs.push(`<span>›</span><a data-crumb="folder">${esc(tr(f.txt))}</a><span>›</span><b>${esc(tr(s))}</b>`);
+      html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="folder">${t('back')}</button><h3>${esc(tr(s))} — ${t('type')}</h3></div><div class="hm-grid">` +
+        leavesFor(f.id).map((lf, i) => {
+          const ll = LEAFLOOK[lf] || ['📄', '#334155', '#64748b'], key = f.id + '|' + s + '|' + lf;
+          actions['l' + i] = () => { try { selectCategory(f.id, s, lf); } catch (e) {} };
+          return tile({ ic:ll[0], emo:1, c1:ll[1], c2:ll[2], title:tr(lf), sub:docs(C.l[key]), id:'l' + i });
+        }).join('') + `</div>`;
+    }
+    hv.innerHTML = html;
+  }
+  document.addEventListener('click', e => {
+    const hv = $('homeView'); if (!hv || !hv.contains(e.target)) return;
+    const c = e.target.closest('[data-crumb]');
+    if (c) { level = c.dataset.crumb === 'root' ? { folder:null, sub:null } : { folder:level.folder, sub:null }; renderHome(); return; }
+    const b = e.target.closest('[data-hm]'); if (b && actions[b.dataset.hm]) actions[b.dataset.hm]();
+  });
+
+  function showHome(lv) {
+    if (lv) level = lv;
+    const hv = $('homeView'); if (!hv) return;
+    ['filesView', 'boardView', 'visioView'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    try { closePreview(); } catch (e) {}
+    hv.style.display = 'block';
+    try { currentView = 'home'; } catch (e) {}
+    document.body.classList.add('home-on');
+    const bt = $('bannerTitle'); if (bt) bt.innerText = t('home');
+    const bs = $('bannerSub'); if (bs) bs.innerText = 'Top Prepa Maths';
+    renderHome(); window.scrollTo({ top:0 });
+  }
+  function hideHome() { const hv = $('homeView'); if (hv) hv.style.display = 'none'; document.body.classList.remove('home-on'); }
+
+  // Les vues d'origine masquent l'accueil quand on les ouvre
+  if (typeof selectCategory === 'function') {
+    const _sc = selectCategory;
+    window.selectCategory = function (fId, sub) {
+      hideHome();
+      const it = (STRUCTURE || []).find(x => x.id === fId);
+      if (it) level = { folder:it, sub:sub || null };
+      const r = _sc.apply(this, arguments); updateCrumbBar(); return r;
+    };
+  }
+  if (typeof handleSpecialTab === 'function') { const _hs = handleSpecialTab; window.handleSpecialTab = function () { hideHome(); return _hs.apply(this, arguments); }; }
+
+  /* ---------- Fil d'Ariane au-dessus des documents ---------- */
+  function updateCrumbBar() {
+    const bar = $('ccCrumbBar'); if (!bar) return;
+    let f = null, s = '', lf = '';
+    try { f = (STRUCTURE || []).find(x => x.id === activeFolder); s = activeSub; lf = activeLeaf; } catch (e) {}
+    const parts = [`<button class="hm-back" data-cb="root">${t('toHome')}</button>`];
+    if (f) parts.push(`<span>›</span><a class="hm-crumbs" style="margin:0" data-cb="folder"><span style="color:var(--bleu2);cursor:pointer;font-weight:700">${esc(tr(f.txt))}</span></a>`);
+    if (f && s && !String(f.id).includes('saudi')) parts.push(`<span>›</span><a data-cb="sub"><span style="color:var(--bleu2);cursor:pointer;font-weight:700">${esc(tr(s))}</span></a>`);
+    if (lf && lf !== s) parts.push(`<span>›</span><b>${esc(tr(lf))}</b>`);
+    bar.innerHTML = parts.join(' ');
+  }
+  function buildCrumbBar() {
+    const fv = $('filesView'); if (!fv || $('ccCrumbBar')) return;
+    const bar = document.createElement('div'); bar.id = 'ccCrumbBar';
+    fv.insertBefore(bar, fv.firstChild);
+    bar.addEventListener('click', e => {
+      const b = e.target.closest('[data-cb]'); if (!b) return;
+      let f = null; try { f = (STRUCTURE || []).find(x => x.id === activeFolder); } catch (er) {}
+      if (b.dataset.cb === 'root') showHome({ folder:null, sub:null });
+      else if (b.dataset.cb === 'folder' && f) showHome({ folder:f, sub:null });
+      else if (b.dataset.cb === 'sub' && f) showHome({ folder:f, sub:activeSub });
+    });
+  }
+
+  /* ---------- Bouton Accueil dans l'en-tête et dans le menu ---------- */
+  function buildButtons() {
+    const hb = $('ccHdr');
+    if (hb && !$('ccHomeBtn')) { const b = document.createElement('button'); b.className = 'hdr-ic'; b.id = 'ccHomeBtn'; b.textContent = '🏠'; b.onclick = () => showHome({ folder:null, sub:null }); hb.insertBefore(b, hb.firstChild); }
+    const hv = document.createElement('div'); hv.id = 'homeView';
+    const fw = document.querySelector('.files-wrap'); if (fw && !$('homeView')) fw.insertBefore(hv, fw.firstChild);
+  }
+  if (typeof buildSidebar === 'function') {
+    const _bs = buildSidebar;
+    window.buildSidebar = function () {
+      const r = _bs.apply(this, arguments);
+      const nav = $('sidebar');
+      if (nav && !nav.querySelector('.cc-home-item')) {
+        const d = document.createElement('div'); d.className = 'side-main-title click cc-home-item'; d.textContent = '🏠 ' + t('home');
+        d.onclick = () => showHome({ folder:null, sub:null }); nav.insertBefore(d, nav.firstChild);
+      }
+      if ($('homeView') && $('homeView').style.display === 'block') renderHome();
+      return r;
+    };
+  }
+
+  /* ---------- Démarrage sur l'accueil ---------- */
+  if (typeof loginAs === 'function') {
+    const _la = loginAs;
+    window.loginAs = function () {
+      const r = _la.apply(this, arguments);
+      document.body.classList.add('has-home');
+      if (opt('homeStart', true)) setTimeout(() => showHome({ folder:null, sub:null }), 30);
+      setTimeout(() => { try { buildSidebar(); } catch (e) {} }, 40);
+      return r;
+    };
+  }
+
+  /* ---------- Réglages ---------- */
+  const prevSet = window.ccExtraSettings;
+  window.ccExtraSettings = sw => {
+    const nm = P().navMode || 'both', ts = P().tileSize || 'm';
+    return (prevSet ? prevSet(sw) : '') + `<div class="cc-sec"><h4>🏠 ${t('home')}</h4>
+      ${sw('homeStart', t('homeStart')).replace(P().homeStart === undefined ? 'type="checkbox"' : '@@', 'type="checkbox" checked')}
+      <div class="cc-row" style="flex-wrap:wrap"><span>${t('navMode')}</span><div class="seg"><button data-pref="navMode" data-val="both" class="${nm === 'both' ? 'on' : ''}">${t('navBoth')}</button><button data-pref="navMode" data-val="icons" class="${nm === 'icons' ? 'on' : ''}">${t('navIcons')}</button></div></div>
+      <div class="cc-row" style="flex-wrap:wrap"><span>${t('tileSize')}</span><div class="seg"><button data-pref="tileSize" data-val="s" class="${ts === 's' ? 'on' : ''}">${t('s')}</button><button data-pref="tileSize" data-val="m" class="${ts === 'm' ? 'on' : ''}">${t('m')}</button><button data-pref="tileSize" data-val="xl" class="${ts === 'xl' ? 'on' : ''}">${t('xl')}</button></div></div></div>`;
+  };
+  const prevApply = window.ccApplyExtra;
+  window.ccApplyExtra = p => {
+    if (prevApply) prevApply(p);
+    const b = document.body;
+    b.classList.toggle('nav-icons', (P().navMode || 'both') === 'icons');
+    b.classList.toggle('tiles-s', P().tileSize === 's'); b.classList.toggle('tiles-xl', P().tileSize === 'xl');
+  };
+  const prevActs = window.ccExtraActions;
+  window.ccExtraActions = () => (prevActs ? prevActs() : []).concat([{ ic:'🏠', l:t('home'), k:'Alt H', run:() => showHome({ folder:null, sub:null }) }]);
+  document.addEventListener('keydown', e => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyH') {
+      const a = $('appScreen'); if (a && getComputedStyle(a).display !== 'none') { e.preventDefault(); showHome({ folder:null, sub:null }); }
+    }
+  });
+  if (typeof toggleLang === 'function') { const _tl = toggleLang; window.toggleLang = function () { const r = _tl.apply(this, arguments); const h = $('homeView'); if (h && h.style.display === 'block') showHome(); updateCrumbBar(); const hb = $('ccHomeBtn'); if (hb) hb.title = t('home') + ' (Alt H)'; return r; }; }
+
+  function init10() {
+    buildButtons(); buildCrumbBar(); window.ccApplyExtra(P());
+    const hb = $('ccHomeBtn'); if (hb) hb.title = t('home') + ' (Alt H)';
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init10); else init10();
+})();
+</script>
+
+<!-- =====================================================================
+     V11 — BARRE D'ICÔNES À GAUCHE
+     Le menu en arborescence est remplacé par une barre de grandes icônes
+     (Accueil, recherche, favoris, tableau, live, fiches, planning…).
+     Les classes se choisissent avec les grandes tuiles de l'accueil.
+     ===================================================================== -->
+<style>
+#ccRail { display:none; width:96px; flex-shrink:0; align-self:stretch; padding:12px 8px 20px;
+  background:linear-gradient(180deg, var(--nav) 0%, var(--nav2) 100%); }
+#ccRail .rl-in { position:sticky; top:74px; display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+#ccRail::-webkit-scrollbar { display:none; }
+body.nav-icons #ccRail { display:flex; }
+.rl-btn { position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; border:none; background:transparent; color:#cbd5e1; cursor:pointer;
+  padding:10px 4px 9px; border-radius:16px; font-weight:700; font-size:11.5px; line-height:1.15; text-align:center; transition:background .15s, color .15s; }
+.rl-btn .i { font-size:25px; line-height:1; width:46px; height:46px; display:flex; align-items:center; justify-content:center; border-radius:14px; transition:background .15s, transform .15s; }
+.rl-btn:hover { color:#fff; } .rl-btn:hover .i { background:rgba(255,255,255,.12); transform:scale(1.06); }
+.rl-btn.on { color:#fff; } .rl-btn.on .i { background:color-mix(in srgb, var(--bleu2) 75%, transparent); box-shadow:0 6px 16px -6px var(--bleu2); }
+.rl-btn.on::before { content:''; position:absolute; left:-8px; top:16px; bottom:16px; width:4px; border-radius:0 4px 4px 0; background:var(--or); }
+.rl-btn .b { position:absolute; top:6px; right:14px; background:#dc2626; color:#fff; font-size:10px; font-weight:800; border-radius:99px; padding:1px 6px; }
+.rl-sep { height:1px; background:rgba(255,255,255,.12); margin:6px 10px; }
+.rl-live .i { animation:none; }
+.rl-live.is-live .i { background:#dc2626; animation:v6pulse 1.4s infinite; }
+/* En mode icônes : en-tête allégé (ces outils sont dans la barre) */
+body.nav-icons #ccHomeBtn, body.nav-icons #ccHubBtn, body.nav-icons #ccMathBtn, body.nav-icons #ccLibBtn, body.nav-icons #ccSetBtn { display:none !important; }
+body.nav-icons #zoomWidget { left:110px !important; }
+/* Téléphone : la barre passe en bas de l'écran */
+@media (max-width:860px) {
+  #ccRail { position:fixed; top:auto; bottom:0; left:0; right:0; width:auto; height:auto; flex-direction:row; padding:6px 6px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-x:auto; z-index:900; gap:2px; }
+  #ccRail .rl-in { position:static; flex-direction:row; }
+  .rl-btn { min-width:68px; padding:6px 2px; font-size:10.5px; } .rl-btn .i { width:38px; height:38px; font-size:21px; }
+  .rl-sep { display:none; } .rl-btn.on::before { display:none; }
+  body.nav-icons .content { padding-bottom:90px; }
+  body.nav-icons #zoomWidget { bottom:92px !important; left:18px !important; }
+  body.nav-icons #ccTop, body.nav-icons #ccTimer { bottom:96px; }
+}
+</style>
+
+<script>
+(function () {
+  'use strict';
+  const UI = window.ccUI; if (!UI) return;
+  const $ = id => document.getElementById(id);
+  const L = () => (typeof lang !== 'undefined' && lang === 'en') ? 'en' : 'fr';
+  const P = () => UI.getP();
+  const TX = {
+    fr:{ home:'Accueil', search:'Chercher', favs:'Favoris', rec:'Récents', board:'Tableau', live:'Live', cards:'Fiches', plan:'Planning', math:'Maths', exam:'Examen', me:'Mon espace', set:'Réglages', menu:'Menu classique' },
+    en:{ home:'Home', search:'Search', favs:'Favorites', rec:'Recent', board:'Board', live:'Live', cards:'Cards', plan:'Planner', math:'Math', exam:'Exam', me:'My space', set:'Settings', menu:'Classic menu' }
+  };
+  const t = k => TX[L()][k];
+  const key = (code, k, mods) => document.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ code, key:k, bubbles:true, cancelable:true }, mods)));
+  const click = id => { const el = $(id); if (el) el.click(); };
+  const goHome = () => click('ccHomeBtn');
+  const special = (id, txt) => { try { handleSpecialTab(id, trNav(txt)); } catch (e) {} };
+
+  const ITEMS = [
+    { k:'home', i:'🏠', run:goHome },
+    { k:'search', i:'🔍', run:() => key('KeyK', 'k', { ctrlKey:true }) },
+    { k:'favs', i:'⭐', run:() => click('ccLibBtn') },
+    { k:'rec', i:'🕘', run:() => { click('ccLibBtn'); setTimeout(() => { const b = document.querySelector('[data-lib="rec"]'); if (b) b.click(); }, 30); } },
+    'sep',
+    { k:'board', i:'✍️', run:() => special('board_tab', '✍️ TABLEAU BLANC') },
+    { k:'live', i:'🎥', run:() => special('visio_tab', '🎥 SÉANCE LIVE'), cls:'rl-live' },
+    'sep',
+    { k:'cards', i:'🃏', run:() => key('KeyF', 'f', { altKey:true }) },
+    { k:'plan', i:'📅', run:() => key('KeyJ', 'j', { altKey:true }) },
+    { k:'math', i:'🧮', run:() => { try { window.ccMath3.openMath('calc'); } catch (e) {} } },
+    { k:'exam', i:'🏁', run:() => key('KeyE', 'e', { altKey:true }) },
+    'sep',
+    { k:'me', i:'👤', run:() => { try { window.ccMath3.openMe(); } catch (e) {} } },
+    { k:'set', i:'⚙️', run:() => click('ccSetBtn') }
+  ];
+
+  function build() {
+    const layout = document.querySelector('.layout'); if (!layout || $('ccRail')) return;
+    const rail = document.createElement('nav'); rail.id = 'ccRail'; rail.setAttribute('aria-label', 'Navigation');
+    layout.insertBefore(rail, layout.firstChild);
+    render();
+    rail.addEventListener('click', e => { const b = e.target.closest('[data-rl]'); if (!b) return; const it = ITEMS.find(x => x.k === b.dataset.rl); if (it) it.run(); setTimeout(syncActive, 50); });
+  }
+  function render() {
+    const rail = $('ccRail'); if (!rail) return;
+    rail.innerHTML = '<div class="rl-in">' + ITEMS.map(it => it === 'sep' ? '<div class="rl-sep"></div>' :
+      `<button class="rl-btn ${it.cls || ''}" data-rl="${it.k}" title="${UI.esc(t(it.k))}"><span class="i">${it.i}</span>${UI.esc(t(it.k))}</button>`).join('') + '</div>';
+    syncActive(); syncBadges();
+  }
+  function syncActive() {
+    let v = ''; try { v = currentView; } catch (e) {}
+    const map = { home:'home', board:'board', visio:'live' };
+    document.querySelectorAll('#ccRail .rl-btn').forEach(b => b.classList.toggle('on', b.dataset.rl === map[v]));
+  }
+  function syncBadges() {
+    // Séance live en cours → icône rouge clignotante
+    const lv = document.querySelector('#ccRail [data-rl="live"]');
+    const pill = document.querySelector('#ccLiveCard .lv-pill:not(.off)');
+    if (lv) lv.classList.toggle('is-live', !!pill);
+    // Fiches / planning : on reprend la pastille du bouton 🗂
+    const hb = document.querySelector('#ccHubBtn .hbd'), cb = document.querySelector('#ccRail [data-rl="cards"]');
+    if (cb) { let s = cb.querySelector('.b'); const n = hb && hb.style.display !== 'none' ? hb.textContent : ''; if (n && n !== '0') { if (!s) { s = document.createElement('span'); s.className = 'b'; cb.appendChild(s); } s.textContent = n; } else if (s) s.remove(); }
+  }
+  setInterval(() => { syncActive(); syncBadges(); }, 1500);
+  ['selectCategory', 'handleSpecialTab'].forEach(fn => {
+    if (typeof window[fn] === 'function') { const o = window[fn]; window[fn] = function () { const r = o.apply(this, arguments); setTimeout(syncActive, 0); return r; }; }
+  });
+  document.addEventListener('click', e => { if (e.target.closest('#ccHomeBtn, [data-cb], [data-crumb], .cc-home-item')) setTimeout(syncActive, 30); });
+
+  // Le mode « icônes seules » devient le mode par défaut
+  const prevApply = window.ccApplyExtra;
+  window.ccApplyExtra = p => {
+    if (prevApply) prevApply(p);
+    document.body.classList.toggle('nav-icons', (P().navMode || 'icons') === 'icons');
+  };
+  // Réglage : renommer les choix (Icônes / Menu classique)
+  const prevSet = window.ccExtraSettings;
+  window.ccExtraSettings = sw => {
+    let h = prevSet ? prevSet(sw) : '';
+    const nm = P().navMode || 'icons';
+    h = h.replace(/<button data-pref="navMode" data-val="both" class="[^"]*">[^<]*<\/button><button data-pref="navMode" data-val="icons" class="[^"]*">[^<]*<\/button>/,
+      `<button data-pref="navMode" data-val="icons" class="${nm === 'icons' ? 'on' : ''}">🧩 ${L() === 'en' ? 'Icons' : 'Icônes'}</button><button data-pref="navMode" data-val="both" class="${nm === 'both' ? 'on' : ''}">☰ ${t('menu')}</button>`);
+    return h;
+  };
+  if (typeof toggleLang === 'function') { const _tl = toggleLang; window.toggleLang = function () { const r = _tl.apply(this, arguments); render(); return r; }; }
+
+  function init11() { build(); window.ccApplyExtra(P()); try { UI.renderSettings(); } catch (e) {} }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init11); else init11();
+})();
+</script>
+
+<style>
+/* Panneaux latéraux fermés : invisibles même quand la page est dézoomée */
+.cc-drawer:not(.show) { visibility:hidden; transition:transform .22s ease, visibility 0s .22s; }
+.cc-drawer.show { visibility:visible; transition:transform .22s ease, visibility 0s; }
+</style>
+<script>
+/* La hauteur de la page suit le zoom (sinon un espace vide apparaît en bas quand on dézoome) */
+(function () {
+  function fit() {
+    const lay = document.querySelector('.layout'); if (!lay) return;
+    const z = (parseFloat(document.body.style.zoom) || 1) * (String(document.body.style.zoom).indexOf('%') > 0 ? 0.01 : 1);
+    const k = z > 0 ? z : 1;
+    lay.style.minHeight = Math.max(0, window.innerHeight / k - 66) + 'px';
+  }
+  if (typeof applyZoom === 'function') { const o = applyZoom; window.applyZoom = function () { const r = o.apply(this, arguments); setTimeout(fit, 0); return r; }; }
+  window.addEventListener('resize', fit);
+  document.addEventListener('DOMContentLoaded', () => setTimeout(fit, 50));
+  setTimeout(fit, 300);
+})();
+</script>
 </body>
 </html>
