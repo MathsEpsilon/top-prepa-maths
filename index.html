@@ -3333,6 +3333,15 @@ function movePdfInList(list, idx, dir) {
 }
 
 function addPdfs(filesList) {
+  if (!filesList || filesList.length === 0) return;
+  const arr = Array.from(filesList);
+  if (typeof window.ccNamePrompt === 'function' && currentUser && currentUser.role === 'admin') {
+    window.ccNamePrompt(arr).then(names => { if (names) addPdfsRaw(arr, names); document.getElementById('pdfInput').value = ''; });
+    return;
+  }
+  addPdfsRaw(arr);
+}
+function addPdfsRaw(filesList, names) {
   if(!filesList || filesList.length === 0) return;
   const pathKey = `${activeFolder}_${activeSub}_${activeLeaf}`;
   const chapterToAssign = pendingChapterTarget || null;
@@ -3355,7 +3364,8 @@ function addPdfs(filesList) {
   const existingNames = scopeList.map(f => f.name);
   let nextOrder = scopeList.length;
 
-  Array.from(filesList).forEach(file => {
+  Array.from(filesList).forEach((file, fIdx) => {
+    const fname = (names && names[fIdx]) || file.name;
     // ⚠️ Firestore limite chaque document à 1 Mo, et l'encodage base64
     // augmente la taille d'environ 33 %. On limite le fichier source à
     // ~700 Ko pour rester en sécurité sous cette limite.
@@ -3364,8 +3374,8 @@ function addPdfs(filesList) {
       return;
     }
     // Empêcher les doublons (cause des fichiers affichés deux fois)
-    if (existingNames.includes(file.name)) {
-      if (!confirm(`« ${file.name} » existe déjà dans ce dossier. L'ajouter quand même ?`)) return;
+    if (existingNames.includes(fname)) {
+      if (!confirm(`« ${fname} » existe déjà dans ce dossier. L'ajouter quand même ?`)) return;
     }
 
     const reader = new FileReader();
@@ -3374,7 +3384,7 @@ function addPdfs(filesList) {
       const today = new Date().toLocaleDateString('fr-FR');
 
       const newDoc = {
-        name: file.name,
+        name: fname,
         path: pathKey,
         size: (file.size / (1024 * 1024)).toFixed(2) + " Mo",
         date: today,
@@ -3394,7 +3404,7 @@ function addPdfs(filesList) {
         loadFiles();
       }).catch(err => {
         console.error('Échec de l\'ajout du fichier :', err);
-        alert(`Échec de l'ajout de « ${file.name} » : ${err.message || err}`);
+        alert(`Échec de l'ajout de « ${fname} » : ${err.message || err}`);
       });
     };
     reader.onerror = function() {
@@ -8302,5 +8312,265 @@ body.nav-icons #zoomWidget { left:110px !important; }
 #ccRail .rl-sep { margin:4px 10px; }
 @media (max-width:860px) { #ccRail .rl-in { max-height:none; overflow:visible; } }
 </style>
+
+<!-- ================= Noms automatiques des documents (admin) ================= -->
+<style>
+#ccNmOv { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:99990; display:none; align-items:center; justify-content:center; padding:16px; }
+#ccNmOv.show { display:flex; }
+#ccNmBox { background:#fff; color:#0f172a; border-radius:20px; width:min(980px,100%); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 30px 60px -20px rgba(0,0,0,.5); overflow:hidden; }
+#ccNmBox .nm-hd { padding:16px 20px; color:#fff; background:linear-gradient(135deg,#7c3aed,#e11d48); }
+#ccNmBox .nm-hd h3 { margin:0 0 4px; font-size:19px; } #ccNmBox .nm-hd p { margin:0; font-size:13px; opacity:.92; }
+#ccNmBox .nm-opts { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; padding:12px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; font-size:13.5px; }
+#ccNmBox .nm-opts label { display:flex; gap:6px; align-items:center; cursor:pointer; }
+#ccNmBox .nm-opts input[type=text] { width:110px; padding:5px 8px; border:1px solid #cbd5e1; border-radius:8px; }
+#ccNmBox .nm-list { overflow:auto; padding:8px 20px; flex:1; }
+#ccNmBox .nm-row { display:grid; grid-template-columns:26px 1fr 1.4fr; gap:10px; align-items:center; padding:8px 0; border-bottom:1px dashed #e2e8f0; }
+#ccNmBox .nm-old { font-size:12.5px; color:#64748b; word-break:break-all; }
+#ccNmBox .nm-new { width:100%; box-sizing:border-box; padding:8px 10px; border:2px solid #c4b5fd; border-radius:10px; font-size:14px; font-weight:600; color:#1e1b4b; }
+#ccNmBox .nm-new:focus { outline:none; border-color:#7c3aed; }
+#ccNmBox .nm-row.same .nm-new { border-color:#e2e8f0; color:#64748b; font-weight:500; }
+#ccNmBox .nm-ft { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; padding:12px 20px; border-top:1px solid #e2e8f0; }
+#ccNmBox .nm-ft button { border:none; border-radius:12px; padding:10px 16px; font-weight:700; cursor:pointer; font-size:14px; }
+#ccNmBox .nm-ok { color:#fff; background:linear-gradient(135deg,#7c3aed,#e11d48); }
+#ccNmBox .nm-sec { background:#eef2ff; color:#3730a3; }
+#ccNmBox .nm-cancel { background:#f1f5f9; color:#334155; }
+#ccNmBox .nm-st { margin-right:auto; align-self:center; font-size:13px; color:#64748b; }
+#ccNmBtn { margin-left:8px; }
+@media (prefers-color-scheme: dark) { body.dark #ccNmBox { background:#0f172a; color:#e2e8f0; } }
+</style>
+<div id="ccNmOv"><div id="ccNmBox"></div></div>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const isAdmin = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin';
+  const LS = { get:(k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }, set:(k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  /* ---------- Libellés ---------- */
+  const CLASSE = { p_classe_pt:'P-T', p_classe_m:'M', d_classe_spst:'SP-ST', d_classe_sm:'SM', ds_pt:'P-T', ds_m:'M', ds_spst:'SP-ST', ds_sm:'SM' };
+  const MATIERE = { 'ANALYSE':'Analyse', 'ALGÈBRE':'Algèbre', 'GÉOMÉTRIE':'Géométrie' };
+  const TYPE = { 'Cours':'Cours', 'Séries corrigées':'Série', 'TD':'TD', 'Devoirs corrigés':'Devoir', 'Devoir surveillé':'DS', 'Examen':'Examen',
+    'Résumé de cours':'Résumé', 'Exercices corrigés':'Exercices', 'Problème corrigé':'Problème', 'Ancien sujet corrigé':'Bac', 'Homework':'Homework' };
+  const NUMBERED = ['Série', 'TD', 'Devoir', 'DS', 'Problème', 'Homework', 'Cours'];
+  function schoolYear(d) { d = d || new Date(); const y = d.getFullYear(); return d.getMonth() >= 7 ? `${y}-${y + 1}` : `${y - 1}-${y}`; }
+
+  /* ---------- Accents des mots mathématiques courants (noms de fichiers sans accents) ---------- */
+  const ACC = { seriesx:'séries', integrale:'intégrale', integrales:'intégrales', integration:'intégration', generalisee:'généralisée', generalisees:'généralisées', serie:'série', series:'séries',
+    entiere:'entière', entieres:'entières', equation:'équation', equations:'équations', differentielle:'différentielle', differentielles:'différentielles', differentiel:'différentiel',
+    determinant:'déterminant', determinants:'déterminants', reduction:'réduction', prehilbertien:'préhilbertien', prehilbertiens:'préhilbertiens', probabilite:'probabilité',
+    probabilites:'probabilités', denombrement:'dénombrement', polynome:'polynôme', polynomes:'polynômes', derivabilite:'dérivabilité', derivee:'dérivée', derivees:'dérivées',
+    continuite:'continuité', developpement:'développement', developpements:'développements', numerique:'numérique', numeriques:'numériques', parametre:'paramètre',
+    parametres:'paramètres', arithmetique:'arithmétique', lineaire:'linéaire', lineaires:'linéaires', reel:'réel', reels:'réels', reelle:'réelle', reelles:'réelles',
+    trigonometrie:'trigonométrie', geometrie:'géométrie', algebre:'algèbre', algebres:'algèbres', theoreme:'théorème', theoremes:'théorèmes', proprietes:'propriétés',
+    propriete:'propriété', generalites:'généralités', complementaire:'complémentaire', elementaire:'élémentaire', elementaires:'élémentaires', reciproque:'réciproque',
+    variete:'variété', espace:'espace', etude:'étude', etudes:'études', successives:'successives', recurrence:'récurrence', recurrentes:'récurrentes', regle:'règle',
+    systeme:'système', systemes:'systèmes', methode:'méthode', methodes:'méthodes', fonctions:'fonctions', dimension:'dimension', symetrique:'symétrique', symetriques:'symétriques',
+    orthogonalite:'orthogonalité', euclidien:'euclidien', euclidiens:'euclidiens', hermitien:'hermitien', integrabilite:'intégrabilité', uniformite:'uniformité', negligeabilite:'négligeabilité',
+    equivalents:'équivalents', equivalence:'équivalence', revision:'révision', revisions:'révisions', resume:'résumé', complements:'compléments', complement:'complément' };
+  const STOP = new Set(['serie','series','td','ds','devoir','devoirs','surveille','surveilles','examen','exam','exams','cours','chapitre','chap','ch','corrige','corriges','corrigee','corrigees',
+    'correction','corr','solution','solutions','sol','enonce','enonces','sujet','n','no','num','numero','final','finale','v','copie','copy','pdf','scan','version','sm','m','pt','pc','spst','sp','st','mp',
+    'ipein','analyse','alg','algebre','classe','prepa','annee','session','principale','controle','rattrapage','partiel','tpm','new','nouveau']);
+  const SMALL = new Set(['et','de','du','des','la','le','les','d','l','a','en','sur']);
+  const deacc = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  /* ---------- Analyse d'un nom (et éventuellement du texte de la 1re page) ---------- */
+  function analyse(name, text) {
+    const raw = String(name || '').replace(/\.pdf$/i, '').replace(/s[eé]ries?([ _\-.]+(?:enti[eè]res|num[eé]riques|de[ _\-]+fourier|de[ _\-]+fonctions|altern[eé]es|g[eé]om[eé]triques))/gi, 'Seriesx$1');
+    const src = deacc(raw + ' ' + (text || '').slice(0, 1500));
+    const fileOnly = deacc(raw);
+    const info = {};
+    const numRe = /(?:serie|td|ds|devoir(?:\s+surveille)?|homework|hw|probleme|cours|chapitre|chap|ch)[\s_\-.]*(?:n\s*[°o]?|no|num(?:ero)?)?[\s_\-.:]*(\d{1,2})(?!\d)/;
+    let m = fileOnly.match(numRe) || src.match(numRe);
+    if (m) info.num = parseInt(m[1], 10);
+    else { m = fileOnly.match(/(?:^|[\s_\-])(?:n\s*[°o]|no)\s*(\d{1,2})(?!\d)/) || fileOnly.match(/^(\d{1,2})(?!\d)/); if (m) info.num = parseInt(m[1], 10); }
+    info.corrige = /corrig|correction|solution|(?:^|[\s_\-])sol(?:$|[\s_\-])/.test(fileOnly) || (!/enonce/.test(fileOnly) && /\bcorrig[ee]\b|\bcorrection\b/.test(deacc((text || '').slice(0, 400))));
+    m = src.match(/(20\d\d)\s*[-\/–]\s*(20\d\d)/); if (m) info.year = m[1] + '-' + m[2];
+    else { m = fileOnly.match(/(?:^|\D)(20\d\d)(?!\d)/); if (m) info.year1 = m[1]; }
+    if (/rattrapage|session\s+de\s+controle|controle/.test(src)) info.session = 'Session de contrôle';
+    else if (/session\s+principale|principale/.test(src)) info.session = 'Session principale';
+    else if (/partiel/.test(src)) info.session = 'Partiel';
+    // Sujet / thème : mots restants du nom de fichier
+    let words = raw.replace(/[_\-.+()\[\]]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').split(/\s+/).filter(Boolean)
+      .filter(w => { const d = deacc(w); return !STOP.has(d) && !/^\d+$/.test(d) && !/^(n|no)\d+$/.test(d) && !/^(serie|td|ds|ch|chap|devoir)\d+$/.test(d) && !/^20\d\d$/.test(d) && d.length > 1; });
+    while (words.length && SMALL.has(deacc(words[0]))) words.shift();
+    while (words.length && SMALL.has(deacc(words[words.length - 1]))) words.pop();
+    let topic = words.map(w => { const d = deacc(w); return ACC[d] || (w === w.toUpperCase() && w.length > 3 ? w.toLowerCase() : w); }).join(' ').trim();
+    if (!topic && text) {
+      const t = String(text).replace(/\s+/g, ' ');
+      const c = t.match(/(?:Chapitre|Th[eè]me|Objet)\s*\d*\s*[:\-–]\s*([^.:;]{4,60})/i);
+      if (c) topic = c[1].trim().split(' ').slice(0, 7).join(' ');
+    }
+    if (topic) topic = topic.charAt(0).toUpperCase() + topic.slice(1);
+    info.topic = topic.length > 70 ? topic.slice(0, 70).trim() + '…' : topic;
+    return info;
+  }
+
+  /* ---------- Construction du nom ---------- */
+  function build(info, ctx) {
+    const type = TYPE[ctx.leaf] || ctx.leaf || 'Document';
+    const cl = CLASSE[ctx.folder] || '', mat = MATIERE[ctx.sub] || ctx.sub || '';
+    const parts = [];
+    if (type === 'Bac') parts.push('Bac ' + (info.year1 || (info.year ? info.year.slice(5) : '')) + (info.session ? ' — ' + info.session : '')).trim();
+    else if (type === 'Examen') parts.push('Examen' + (info.session ? ' — ' + info.session : ''));
+    else parts.push(type + (info.num != null && NUMBERED.includes(type) ? ' n°' + info.num : ''));
+    const topic = info.topic || ((type === 'Cours' || type === 'Série' || type === 'TD' || type === 'Résumé' || type === 'Exercices') ? (ctx.chapter || '') : '');
+    if (topic) parts.push(topic);
+    if (ctx.withPlace && (mat || cl)) parts.push([mat, cl].filter(Boolean).join(' '));
+    if ((type === 'DS' || type === 'Examen' || type === 'Devoir') && ctx.withYear) parts.push(info.year || ctx.year);
+    let n = parts.filter(Boolean).join(' — ').replace(/\s+/g, ' ').trim();
+    if (info.corrige) n += ' (corrigé)';
+    return n + '.pdf';
+  }
+  function uniq(names, taken) {
+    const used = new Set((taken || []).map(x => x.toLowerCase()));
+    return names.map(n => {
+      let c = n, k = 2;
+      while (used.has(c.toLowerCase())) c = n.replace(/\.pdf$/i, '') + ` (${k++}).pdf`;
+      used.add(c.toLowerCase()); return c;
+    });
+  }
+
+  /* ---------- Lecture du texte de la 1re page (pdf.js) ---------- */
+  let pdfjsP = null;
+  function pdfjs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return pdfjsP || (pdfjsP = new Promise((res, rej) => {
+      const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      sc.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); } catch (e) { rej(e); } };
+      sc.onerror = rej; document.head.appendChild(sc);
+    }));
+  }
+  async function firstPageText(bytes) {
+    try {
+      const lib = await pdfjs(); const doc = await lib.getDocument({ data:bytes }).promise;
+      const p = await doc.getPage(1); const tc = await p.getTextContent();
+      return tc.items.map(i => i.str).join(' ');
+    } catch (e) { return ''; }
+  }
+  const fileBytes = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(new Uint8Array(fr.result)); fr.onerror = () => r(null); fr.readAsArrayBuffer(f); });
+  const uriBytes = u => { try { const b = atob(String(u).split(',')[1]); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; } catch (e) { return null; } };
+
+  function ctxNow() {
+    const chapName = id => { const c = (window._curChapters || []).find(x => x.id === id); return c ? String(c.name || '').replace(/^\s*(chapitre|chap\.?)\s*\d*\s*[:\-–]?\s*/i, '') : ''; };
+    return { folder:activeFolder, sub:activeSub, leaf:activeLeaf, year:LS.get('tpm_nm_year', schoolYear()),
+      withPlace:LS.get('tpm_nm_place', '1') === '1', withYear:LS.get('tpm_nm_year_on', '1') === '1', chapName };
+  }
+
+  /* ---------- Fenêtre commune ---------- */
+  function openBox({ title, sub, rows, okLabel, keepLabel, onOk, onKeep, withSort, withRead }) {
+    return new Promise(done => {
+      const box = $('ccNmBox'), ov = $('ccNmOv');
+      const C = ctxNow();
+      box.innerHTML = `<div class="nm-hd"><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>
+        <div class="nm-opts">
+          <label><input type="checkbox" id="nmPlace" ${C.withPlace ? 'checked' : ''}> Ajouter matière + classe</label>
+          <label><input type="checkbox" id="nmYearOn" ${C.withYear ? 'checked' : ''}> Année scolaire (DS, examens)</label>
+          <label>Année : <input type="text" id="nmYear" value="${esc(C.year)}"></label>
+          ${withSort ? '<label><input type="checkbox" id="nmSort" checked> Trier la liste par numéro</label>' : ''}
+          ${withRead ? '<button class="nm-sec" id="nmRead" style="border:none;border-radius:10px;padding:6px 12px;font-weight:700;cursor:pointer">📖 Lire le contenu des PDF</button>' : ''}
+          <label style="margin-left:auto"><input type="checkbox" id="nmAuto" ${LS.get('tpm_autoname', '1') === '1' ? 'checked' : ''}> Proposer des noms à chaque ajout</label>
+        </div>
+        <div class="nm-list" id="nmList"></div>
+        <div class="nm-ft"><span class="nm-st" id="nmSt"></span>
+          ${keepLabel ? `<button class="nm-sec" id="nmKeep">${esc(keepLabel)}</button>` : ''}
+          <button class="nm-cancel" id="nmCancel">Annuler</button>
+          <button class="nm-ok" id="nmOk">${esc(okLabel)}</button></div>`;
+      const render = () => {
+        const c = ctxNow();
+        const names = uniq(rows.map(r => build(r.info, Object.assign({}, c, { chapter:c.chapName(r.chapter) }))), rows.taken);
+        $('nmList').innerHTML = rows.map((r, i) => `<div class="nm-row ${names[i] === r.old ? 'same' : ''}">
+          <input type="checkbox" data-i="${i}" ${r.on === false ? '' : 'checked'}>
+          <div class="nm-old">${esc(r.old)}</div>
+          <input class="nm-new" data-n="${i}" value="${esc(r.edited || names[i])}"></div>`).join('');
+        const ch = names.filter((n, i) => n !== rows[i].old).length;
+        $('nmSt').textContent = `${rows.length} document(s) · ${ch} nom(s) modifié(s)`;
+      };
+      const save = () => {
+        LS.set('tpm_nm_place', $('nmPlace').checked ? '1' : '0'); LS.set('tpm_nm_year_on', $('nmYearOn').checked ? '1' : '0');
+        LS.set('tpm_nm_year', $('nmYear').value.trim() || schoolYear()); LS.set('tpm_autoname', $('nmAuto').checked ? '1' : '0');
+      };
+      ['nmPlace', 'nmYearOn'].forEach(id => $(id).onchange = () => { save(); rows.forEach(r => delete r.edited); render(); });
+      $('nmYear').oninput = () => { save(); rows.forEach(r => delete r.edited); render(); };
+      $('nmAuto').onchange = save;
+      $('nmList').addEventListener('input', e => { const i = e.target.dataset.n; if (i != null) rows[i].edited = e.target.value; });
+      $('nmList').addEventListener('change', e => { const i = e.target.dataset.i; if (i != null) rows[i].on = e.target.checked; });
+      if (withRead) $('nmRead').onclick = async () => {
+        const b = $('nmRead'); b.disabled = true;
+        for (let i = 0; i < rows.length; i++) {
+          b.textContent = `📖 Lecture ${i + 1}/${rows.length}…`;
+          try { const d = await db.collection('files').doc(rows[i].id).get(); const by = d.exists ? uriBytes(d.data().content) : null;
+            if (by) { const txt = await firstPageText(by); rows[i].info = analyse(rows[i].old, txt); delete rows[i].edited; } } catch (e) {}
+        }
+        b.textContent = '📖 Contenu lu ✓'; render();
+      };
+      const close = v => { ov.classList.remove('show'); done(v); };
+      $('nmCancel').onclick = () => close(null);
+      if (keepLabel) $('nmKeep').onclick = () => { save(); close(onKeep()); };
+      $('nmOk').onclick = () => {
+        save();
+        const vals = Array.from(document.querySelectorAll('#nmList .nm-new')).map(x => { let v = x.value.trim() || 'Document'; if (!/\.pdf$/i.test(v)) v += '.pdf'; return v.replace(/[\\/:*?"<>|]+/g, '-'); });
+        close(onOk(vals, withSort && $('nmSort') && $('nmSort').checked));
+      };
+      render(); ov.classList.add('show');
+    });
+  }
+
+  /* ---------- 1) À l'ajout : noms proposés avant l'envoi ---------- */
+  window.ccNamePrompt = async function (files) {
+    if (LS.get('tpm_autoname', '1') !== '1') return files.map(f => f.name);
+    showToast('🏷️ Analyse des PDF…');
+    const rows = [];
+    for (const f of files) { const by = f.size <= 700 * 1024 ? await fileBytes(f) : null; const txt = by ? await firstPageText(by) : ''; rows.push({ old:f.name, info:analyse(f.name, txt), chapter:pendingChapterTarget || null }); }
+    // numéro manquant pour DS / séries / TD : on prend le suivant dans le dossier
+    const type = TYPE[activeLeaf];
+    if (['DS', 'Série', 'TD', 'Devoir', 'Homework'].includes(type)) {
+      const nums = (window._curDocsAll || []).map(d => analyse(d.name).num).filter(n => n != null);
+      let next = (nums.length ? Math.max(...nums) : 0) + 1;
+      rows.forEach(r => { if (r.info.num == null) r.info.num = next++; });
+    }
+    rows.taken = (window._curDocsAll || []).map(d => d.name);
+    return openBox({ title:'🏷️ Noms proposés pour les nouveaux documents', sub:'Vous pouvez modifier chaque nom avant l’envoi. Décochez une ligne pour garder le nom d’origine.',
+      rows, okLabel:'✅ Ajouter avec ces noms', keepLabel:'Garder les noms d’origine',
+      onOk:vals => vals.map((v, i) => rows[i].on === false ? files[i].name : v), onKeep:() => files.map(f => f.name) });
+  };
+
+  /* ---------- 2) Réorganiser les noms des documents déjà en ligne ---------- */
+  async function organize() {
+    const docs = (window._curDocsAll || []).slice();
+    if (!docs.length) { showToast('Aucun document dans ce dossier.'); return; }
+    const rows = docs.map(d => ({ id:d.id, old:d.name, info:analyse(d.name), chapter:d.chapter || null }));
+    rows.taken = [];
+    const res = await openBox({ title:'🏷️ Organiser les noms de ce dossier', sub:'Noms uniformes : type et numéro, thème, matière et classe, année. Rien n’est modifié avant « Appliquer ».',
+      rows, okLabel:'✅ Appliquer', withSort:true, withRead:true, onOk:(vals, sort) => ({ vals, sort }) });
+    if (!res) return;
+    const batch = db.batch(); let n = 0;
+    rows.forEach((r, i) => { if (r.on !== false && res.vals[i] !== r.old) { batch.update(db.collection('files').doc(r.id), { name:res.vals[i] }); n++; } });
+    if (res.sort) {
+      const groups = {};
+      docs.forEach((d, i) => { (groups[d.chapter || '_'] = groups[d.chapter || '_'] || []).push({ id:d.id, name:rows[i].on !== false ? res.vals[i] : d.name }); });
+      const key = x => { const a = analyse(x.name); return [a.num == null ? 999 : a.num, a.corrige ? 1 : 0, x.name]; };
+      Object.values(groups).forEach(g => {
+        g.sort((a, b) => { const ka = key(a), kb = key(b); return (ka[0] - kb[0]) || (ka[1] - kb[1]) || ka[2].localeCompare(kb[2], 'fr', { numeric:true }); });
+        g.forEach((x, k) => batch.update(db.collection('files').doc(x.id), { order:k }));
+      });
+    }
+    batch.commit().then(() => { showToast(`🏷️ ${n} nom(s) mis à jour` + (res.sort ? ' · liste triée' : '')); loadFiles(); })
+      .catch(e => alert('Échec : ' + (e.message || e) + '\n(vérifiez que les règles Firestore autorisent l’admin à modifier le champ « name »)'));
+  }
+
+  /* ---------- Bouton dans l'en-tête de la liste (admin) ---------- */
+  function ensureBtn() {
+    const add = $('btnAdd'); if (!add) return;
+    let b = $('ccNmBtn');
+    if (!b) { b = document.createElement('button'); b.id = 'ccNmBtn'; b.className = 'btn-add'; b.textContent = '🏷️ Organiser les noms';
+      b.style.background = 'linear-gradient(135deg,#7c3aed,#e11d48)'; b.onclick = organize; add.parentNode.insertBefore(b, add.nextSibling); }
+    b.style.display = isAdmin() && add.style.display !== 'none' ? 'inline-block' : 'none';
+  }
+  if (typeof loadFiles === 'function') { const _lf = loadFiles; window.loadFiles = function () { const r = _lf.apply(this, arguments); try { ensureBtn(); } catch (e) {} return r; }; }
+  document.addEventListener('DOMContentLoaded', ensureBtn); setTimeout(ensureBtn, 1500);
+  window.ccOrganizeNames = organize; window.ccAnalyseName = analyse; window.ccBuildName = build;
+})();
+</script>
 </body>
 </html>
