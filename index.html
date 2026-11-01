@@ -199,6 +199,7 @@
     padding:20px 16px; display:block !important; visibility:visible !important; opacity:1 !important;
   }
   aside.stats.show { display:block !important; visibility:visible !important; opacity:1 !important; }
+  aside.stats:not(.show), body.cc-preview aside.stats.show { display:none !important; }   /* ✅ statistiques : administrateur uniquement */
   .stats h3 { color:var(--bleu); font-size:16px; margin-bottom:14px; font-weight:800; padding-bottom:10px; border-bottom:2px solid #e2e8f0; }
   .stat-card {
     background:white; border-radius:12px; padding:12px 14px; margin-bottom:10px;
@@ -1132,6 +1133,10 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
       <div class="heat-labels"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
       <h4>⬇ Téléchargements par matière</h4>
       <div id="stBySub"></div>
+      <h4>🎓 Connectés par section</h4>
+      <div id="stSecOnline" class="sec-stats"></div>
+      <h4>🎓 Inscrits par section</h4>
+      <div id="stSecUsers" class="sec-stats"></div>
       <h4 data-i18n="statWho">🟢 Connectés en ce moment</h4>
       <div id="stWho"></div>
       <h4 data-i18n="statByDay">📅 Connexions par jour</h4>
@@ -1359,19 +1364,33 @@ const SECTIONS = {
   sm:    { label:'SM (2e année)',     folders:['d_classe_sm','ds_sm'] },
   autre: { label:'Autre (Bac, Licence…)', folders:[] }
 };
-// false : l'étudiant voit sa section + les dossiers communs (Divers, Bac, Licence, tableau blanc, live)
-// true  : l'étudiant ne voit QUE sa section (les dossiers communs sont masqués aussi)
-const SECTION_SEULEMENT = false;
+// true  : un étudiant d'une classe (PC-PT, M, SP-ST, SM) ne voit QUE sa classe et ses DS/examens
+//         (Divers, Bac et Licence sont réservés aux inscrits « Autre ») ; tableau blanc et live restent accessibles
+// false : l'étudiant voit sa section + les dossiers communs
+const SECTION_SEULEMENT = true;
 const CLASS_FOLDERS = [].concat(...Object.values(SECTIONS).map(x => x.folders));
 const COMMON_FOLDERS = ['divers_main', 'bac_main', 'licence'];
 function sectionLabel(sec) { return (SECTIONS[sec] && SECTIONS[sec].label) || '— non précisée —'; }
-function isAdminNow() { return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin'; }
+// Aperçu « voir comme un étudiant » (administrateur) : null = vue administrateur normale
+window.ccPreviewSec = null;
+function isRealAdmin() { return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin'; }
+function isAdminNow() { return isRealAdmin() && !window.ccPreviewSec; }
+function mySection() { return window.ccPreviewSec || (currentUser && currentUser.section) || ''; }
+// ✅ Aucun blocage : tous les étudiants consultent toutes les sections et tous les documents.
+//    La section demandée à l'inscription sert uniquement aux statistiques (qui est connecté, de quelle section).
+const ACCES_LIBRE = true;
 function folderAllowed(id) {
+  if (ACCES_LIBRE) return true;
   if (!id || typeof currentUser === 'undefined' || !currentUser || isAdminNow()) return true;
-  const sec = SECTIONS[currentUser.section];
-  if (CLASS_FOLDERS.includes(id)) return !!sec && sec.folders.includes(id);
-  if (SECTION_SEULEMENT && COMMON_FOLDERS.includes(id)) return false;
+  const key = mySection(), sec = SECTIONS[key];
+  if (!sec) return false;                                  // section non précisée : rien tant qu'elle n'est pas choisie
+  if (CLASS_FOLDERS.includes(id)) return sec.folders.includes(id);
+  if (COMMON_FOLDERS.includes(id)) return !SECTION_SEULEMENT || key === 'autre';
   return true;
+}
+function firstAllowedFolder() {
+  const f = STRUCTURE.find(it => it.type === 'folder' && structItemVisible(it) && (!it.groups || it.groups.includes((currentUser && currentUser.group) || 'prepa')));
+  return f ? f.id : null;
 }
 function pathAllowed(p) {
   p = String(p || '');
@@ -1604,8 +1623,38 @@ function loginAs(userObj) {
   setUserPresence(currentUser.username, true);
   startRealtimeListeners();
 
-  // Sélection par défaut
-  selectCategory('p_classe_pt', 'ANALYSE', 'Cours');
+  // Sélection par défaut : le premier dossier autorisé (la classe de l'étudiant)
+  const f0 = folderAllowed('p_classe_pt') ? 'p_classe_pt' : firstAllowedFolder();
+  if (f0) { try { const it = STRUCTURE.find(x => x.id === f0); selectCategory(f0, (it && it.sub && it.sub[0]) || 'ANALYSE', 'Cours'); } catch (e) {} }
+}
+
+/* ================= Aperçu « Voir comme un étudiant » (administrateur) ================= */
+function ccSetPreview(sec) {
+  window.ccPreviewSec = SECTIONS[sec] ? sec : null;
+  document.body.classList.toggle('cc-preview', !!window.ccPreviewSec);
+  window.allFiles = (window._allFilesRaw || window.allFiles || []).filter(f => pathAllowed(f.path));
+  const bar = document.getElementById('ccPrevBar');
+  if (bar) bar.innerHTML = window.ccPreviewSec
+    ? `👁 ${lang === 'en' ? 'Preview: what a student of' : 'Aperçu : ce que voit un étudiant'} <b>${sectionLabel(window.ccPreviewSec)}</b> ${lang === 'en' ? 'sees' : ''}<button onclick="ccSetPreview(null)">✕ ${lang === 'en' ? 'Back to admin view' : 'Revenir à la vue administrateur'}</button>`
+    : '';
+  const sel = document.getElementById('ccPrevSel'); if (sel) sel.value = window.ccPreviewSec || '';
+  try { buildSidebar(); } catch (e) {}
+  try { if (window.UI && UI.showHome) UI.showHome(); else { const ev = new KeyboardEvent('keydown', { altKey:true, code:'KeyH', bubbles:true }); document.dispatchEvent(ev); } } catch (e) {}
+}
+function ccMountPreview() {
+  if (!isRealAdmin()) { const s0 = document.getElementById('ccPrevSel'); if (s0) s0.remove(); return; }
+  if (!document.getElementById('ccPrevBar')) {
+    const bar = document.createElement('div'); bar.id = 'ccPrevBar'; document.body.appendChild(bar);
+  }
+  if (document.getElementById('ccPrevSel')) return;
+  const hdr = document.querySelector('#appScreen header'); if (!hdr) return;
+  const sel = document.createElement('select'); sel.id = 'ccPrevSel';
+  sel.title = lang === 'en' ? 'See the site as a student of…' : 'Voir le site comme un étudiant de…';
+  sel.innerHTML = `<option value="">👁 ${lang === 'en' ? 'Admin view' : 'Vue admin'}</option>` +
+    Object.keys(SECTIONS).map(k => `<option value="${k}">👁 ${SECTIONS[k].label}</option>`).join('');
+  sel.onchange = () => ccSetPreview(sel.value);
+  const logout = [...hdr.querySelectorAll('button')].find(b => /D[ée]connexion|Log ?out/i.test(b.textContent));
+  if (logout && logout.parentNode) logout.parentNode.insertBefore(sel, logout); else hdr.appendChild(sel);
 }
 
 function logout() {
@@ -1886,6 +1935,7 @@ function setUserPresence(username, isOnline) {
     username: username,
     name: currentUser.name,
     role: currentUser.role || 'student',
+    section: currentUser.section || '',
     region: currentUser.region || '',
     city: currentUser.city || '',
     online: isOnline,
@@ -1896,7 +1946,7 @@ function setUserPresence(username, isOnline) {
 function logConnection(u) {
   try {
     const d = new Date();
-    db.collection('connlog').add({ u: u.username, n: u.name, date: d.toLocaleDateString('fr-FR'), ts: Date.now() });
+    db.collection('connlog').add({ u: u.username, n: u.name, s: u.section || '', date: d.toLocaleDateString('fr-FR'), ts: Date.now() });
   } catch(e) {}
 }
 
@@ -2088,6 +2138,20 @@ function adminSetSection(username, sec) {
     .catch(err => alert(`Erreur : ${err.message || err}`));
 }
 
+/* 🎓 Barres « par section » du panneau de statistiques */
+const SEC_COLORS = { pcpt:'#2563eb', m:'#7c3aed', spst:'#059669', sm:'#ea580c', autre:'#0891b2', '':'#94a3b8' };
+const SEC_SHORT = { pcpt:'PC-PT', m:'M', spst:'SP-ST', sm:'SM', autre:'Autre', '':'Non précisée' };
+function renderSectionBars(elId, people) {
+  const el = document.getElementById(elId); if (!el) return;
+  const c = { pcpt:0, m:0, spst:0, sm:0, autre:0, '':0 };
+  people.forEach(p => { const k = SECTIONS[p.section] ? p.section : ''; c[k]++; });
+  const tot = people.length, max = Math.max(1, ...Object.values(c));
+  el.innerHTML = Object.keys(c).filter(k => k !== '' || c[k]).map(k =>
+    `<div class="sec-bar"><span class="sb-l"><i style="background:${SEC_COLORS[k]}"></i>${SEC_SHORT[k]}</span>
+      <span class="sb-t"><span style="width:${(c[k] / max * 100).toFixed(0)}%; background:${SEC_COLORS[k]}"></span></span><b>${c[k]}</b></div>`).join('') +
+    `<div class="sec-tot">Total : <b>${tot}</b></div>`;
+}
+
 /* ✅ Étudiant inscrit avant cette mise à jour : il choisit sa section une seule fois */
 function askSectionIfMissing() {
   if (!currentUser || currentUser.role === 'admin' || SECTIONS[currentUser.section]) return;
@@ -2097,7 +2161,7 @@ function askSectionIfMissing() {
   box.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(15,23,42,.6); display:flex; align-items:center; justify-content:center; padding:20px;';
   box.innerHTML = `<div style="background:#fff; color:#0f172a; border-radius:18px; padding:26px; max-width:440px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,.35); font-family:inherit;">
     <h3 style="margin:0 0 8px; color:#0f2a5c;">🎓 ${lang === 'en' ? 'Choose your class' : 'Choisissez votre section'}</h3>
-    <p style="margin:0 0 16px; font-size:14px; color:#475569;">${lang === 'en' ? 'You will only see the documents of your class. Only the administrator can change it afterwards.' : "Vous verrez uniquement les documents de votre section. Seul l'administrateur pourra la modifier ensuite."}</p>
+    <p style="margin:0 0 16px; font-size:14px; color:#475569;">${lang === 'en' ? 'This only helps the teacher know which classes are connected. You can still browse every class and document.' : "Elle sert seulement au professeur à savoir quelles sections sont connectées. Vous pourrez consulter toutes les sections et tous les documents."}</p>
     ${Object.keys(SECTIONS).map(k => `<button data-sec="${k}" style="display:block; width:100%; margin:0 0 8px; padding:12px; border:none; border-radius:12px; cursor:pointer; font-size:15px; font-weight:700; color:#fff; background:linear-gradient(135deg,#1d4ed8,#7c3aed);">${SECTIONS[k].label}</button>`).join('')}
   </div>`;
   document.body.appendChild(box);
@@ -2152,6 +2216,7 @@ function startRealtimeListeners() {
         document.getElementById('totalUsers').innerText = snap.size;
         document.getElementById('stReg').innerText = snap.size;
         renderUsersList(snap);
+        try { renderSectionBars('stSecUsers', snap.docs.map(d => d.data()).filter(u => u.role !== 'admin')); } catch (e) {}
         // ✅ Synchronise le compteur public avec le nombre réel (utile une
         // seule fois pour rattraper les comptes déjà inscrits avant ce système).
         db.collection('stats').doc('public').set({ totalUsers: snap.size }, { merge: true }).catch(() => {});
@@ -2210,7 +2275,7 @@ function startRealtimeListeners() {
         const row = document.createElement('div');
         row.className = 'top-item user-row';
         const isAdminRow = p.role === 'admin';
-        row.innerHTML = `<div class="row-top"><span>👤 ${p.name}</span><span class="tn">actif</span></div>`;
+        row.innerHTML = `<div class="row-top"><span>👤 ${p.name}</span><span class="tn">${p.section && SEC_SHORT[p.section] ? '🎓 ' + SEC_SHORT[p.section] + ' · ' : ''}actif</span></div>`;
         if (!isAdminRow) {
           const actions = document.createElement('div');
           actions.className = 'row-actions';
@@ -2249,6 +2314,18 @@ function startRealtimeListeners() {
     setInterval(refreshPublicOnlineCount, 60000);
   }
 
+
+  // 2ter.ter Connectés par section (admin uniquement)
+  if (isAdmin) db.collection('presence').where('online', '==', true).onSnapshot(snap => {
+    const now = Date.now(), actifs = [];
+    snap.forEach(doc => {
+      const p = doc.data(), tms = (p.lastActive && p.lastActive.toMillis) ? p.lastActive.toMillis() : now;
+      if (now - tms < 180000 && p.role !== 'admin') actifs.push(p);
+    });
+    // la présence ne contient la section que depuis cette mise à jour : on complète avec la liste des inscrits
+    const known = {}; try { (window._lastUsersSnap ? window._lastUsersSnap.docs : []).forEach(d => { known[d.id] = d.data().section || ''; }); } catch (e) {}
+    renderSectionBars('stSecOnline', actifs.map(p => ({ section: p.section || known[p.username] || '' })));
+  });
 
   // 2ter.bis Utilisateurs connectés par région/ville (admin uniquement : contient des données de présence individuelles)
   if (isAdmin) db.collection('presence').where('online', '==', true).onSnapshot(snap => {
@@ -7419,6 +7496,23 @@ body.tiles-xl .hm-tt b { font-size:23px; }
 .hm-lock { position:absolute; top:14px; right:14px; z-index:2; font-size:18px; }
 .hm-news { display:flex; flex-direction:column; gap:10px; }
 
+/* ---------- Statistiques par section ---------- */
+.sec-stats { display:flex; flex-direction:column; gap:7px; margin-bottom:6px; }
+.sec-bar { display:grid; grid-template-columns:96px 1fr 30px; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--texte); }
+.sec-bar .sb-l { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.sec-bar .sb-l i { width:10px; height:10px; border-radius:3px; flex:none; }
+.sec-bar .sb-t { height:9px; border-radius:6px; background:var(--bord); overflow:hidden; }
+.sec-bar .sb-t span { display:block; height:100%; border-radius:6px; min-width:2px; transition:width .4s; }
+.sec-bar b { text-align:right; }
+.sec-tot { font-size:12px; color:var(--gris); text-align:right; }
+/* ---------- Aperçu « voir comme un étudiant » ---------- */
+#ccPrevSel { height:36px; border-radius:10px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.14); color:#fff; font-weight:700; font-size:13px; padding:0 8px; cursor:pointer; }
+#ccPrevSel option { color:#0f172a; background:#fff; }
+#ccPrevBar { display:none; }
+body.cc-preview #ccPrevBar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9000;
+  background:#16a34a; color:#fff; font-weight:700; font-size:14px; padding:10px 14px; border-radius:14px; box-shadow:0 12px 30px -10px rgba(0,0,0,.45); }
+body.cc-preview #ccPrevBar button { border:none; background:#fff; color:#15803d; font-weight:800; border-radius:9px; padding:6px 10px; cursor:pointer; }
+body.cc-preview #btnAdd, body.cc-preview #btnAdminUsers, body.cc-preview #btnAdminChapters, body.cc-preview #adminBadge, body.cc-preview #visioAdmin { display:none !important; }
 /* ---------- Actualité compacte : une icône par section ---------- */
 .hm-sec.nw-title { display:flex; align-items:center; gap:9px; color:#16a34a; }
 .nw-led { width:11px; height:11px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 0 rgba(34,197,94,.7); animation:nwPulse 1.4s infinite; }
@@ -7539,7 +7633,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     return c;
   }
   const userGroup = () => (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.group || 'prepa') : 'prepa';
-  const allowed = it => (!it.groups || it.groups.includes(userGroup()) || (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin')) && structItemVisible(it);
+  const allowed = it => (!it.groups || it.groups.includes(userGroup()) || isAdminNow()) && structItemVisible(it);
   const leavesFor = fid => leafCatsFor(fid);
 
   /* ---------- Vue d'accueil ---------- */
