@@ -7475,7 +7475,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     } else if (!level.folder) {
       const name = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? String(currentUser.name).split(' ')[0] : '';
       html += `<div class="hm-head"><h3>${esc(name ? t('hello').replace('{n}', name) : t('home'))}</h3></div>`;
-      // 📰 Actualité : derniers documents ajoutés, regroupés par classe › matière › type
+      // 📰 Actualité : documents ajoutés depuis moins de 24 h, regroupés par classe › matière › type
       try {
         const AUD = { p_classe_pt:'P-T', ds_pt:'P-T', p_classe_m:'M', ds_m:'M', d_classe_spst:'SP-ST', ds_spst:'SP-ST', d_classe_sm:'SM', ds_sm:'SM' };
         const MAT = { 'ANALYSE':'Analyse', 'ALGÈBRE':'Algèbre', 'GÉOMÉTRIE':'Géométrie' };
@@ -7483,7 +7483,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
         const ago = ts => { const m = Math.max(1, Math.round((Date.now() - ts) / 60000)); if (m < 60) return L() === 'en' ? `${m} min ago` : `il y a ${m} min`;
           const h = Math.round(m / 60); if (h < 24) return L() === 'en' ? `${h} h ago` : `il y a ${h} h`; const d = Math.round(h / 24);
           return d === 1 ? (L() === 'en' ? 'yesterday' : 'hier') : (L() === 'en' ? `${d} days ago` : `il y a ${d} jours`); };
-        const since = Date.now() - 30 * 86400000, groups = {};
+        const since = Date.now() - 24 * 3600000, groups = {};   // l'actualité ne reste affichée que 24 heures
         (window.allFiles || []).filter(f => (f.ts || 0) >= since).forEach(f => {
           let loc = null; try { loc = parsePath(f.path); } catch (e) {} if (!loc) return;
           const k = loc.folder + '|' + loc.sub + '|' + loc.leaf;
@@ -8875,6 +8875,106 @@ body.nav-icons #zoomWidget { left:110px !important; }
     window[fn] = function () { try { syncNames(); } catch (e) {} return o.apply(this, arguments); }; };
   wrap('buildSidebar');
   setTimeout(() => { try { syncNames(); } catch (e) {} }, 2500);
+})();
+</script>
+
+<!-- ================= Bandeau : 4 formules par filière et par matière ================= -->
+<style>
+#ccBF { position:absolute; top:14px; right:22px; z-index:3; width:min(56%, 720px); display:grid; grid-template-columns:1fr 1fr; gap:10px; pointer-events:none; }
+#ccBF .bf { pointer-events:auto; position:relative; padding:9px 12px 8px; border-radius:14px; color:#fff; overflow:hidden;
+  background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.22); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  box-shadow:0 10px 24px -16px rgba(0,0,0,.6); opacity:0; transform:translateY(6px); animation:ccBfIn .5s ease forwards; transition:background .2s, transform .2s; }
+#ccBF .bf:hover { background:rgba(255,255,255,.2); transform:translateY(-2px); }
+#ccBF .bf:nth-child(2) { animation-delay:.08s } #ccBF .bf:nth-child(3) { animation-delay:.16s } #ccBF .bf:nth-child(4) { animation-delay:.24s }
+@keyframes ccBfIn { to { opacity:1; transform:none; } }
+#ccBF .bf small { display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#bfdbfe; margin-bottom:3px; }
+#ccBF .bf small i { width:7px; height:7px; border-radius:50%; background:var(--dot,#fde68a); flex:none; }
+#ccBF .bf .fx { color:#fde68a; font-size:14.5px; overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:none; }
+#ccBF .bf .fx::-webkit-scrollbar { display:none; }
+#ccBF .bf .fx .katex { color:#fde68a; }
+body.compact #ccBF { top:8px; gap:6px; } body.compact #ccBF .bf { padding:6px 10px; }
+@media (max-width:1100px) { #ccBF { width:min(60%, 560px); } #ccBF .bf .fx { font-size:12.5px; } }
+@media (max-width:760px) { #ccBF { display:none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  const R = String.raw;
+  /* ---------- Les formules : [étiquette, LaTeX] ---------- */
+  const F = {
+    home: [['Suites', R`\forall\varepsilon>0,\ \exists N,\ \forall n\ge N,\ |u_n-\ell|<\varepsilon`], ['Taylor', R`f(x)=\sum_{k=0}^{n}\frac{f^{(k)}(a)}{k!}(x-a)^k+o\big((x-a)^n\big)`],
+      ['Euler', R`e^{i\pi}+1=0`], ['Réduction', R`A=PDP^{-1},\ D=\mathrm{diag}(\lambda_1,\dots,\lambda_n)`]],
+    // ----- 1re année P-T -----
+    'pt|ANALYSE': [['Limite d’une suite', R`\forall\varepsilon>0,\ \exists N,\ \forall n\ge N,\ |u_n-\ell|<\varepsilon`], ['Accroissements finis', R`f(b)-f(a)=f'(c)\,(b-a)`],
+      ['Développement limité', R`e^x=1+x+\frac{x^2}{2}+\dots+\frac{x^n}{n!}+o(x^n)`], ['Intégration par parties', R`\int_a^b u v'=\big[uv\big]_a^b-\int_a^b u'v`]],
+    'pt|ALGÈBRE': [['Forme exponentielle', R`z=re^{i\theta},\quad z^n=r^n e^{in\theta}`], ['Racines n-ièmes', R`\omega_k=e^{\frac{2ik\pi}{n}},\ k\in\{0,\dots,n-1\}`],
+      ['Formule du binôme', R`(a+b)^n=\sum_{k=0}^{n}\binom{n}{k}a^k b^{n-k}`], ['Rang', R`\dim E=\dim\ker f+\mathrm{rg}\,f`]],
+    // ----- 1re année M -----
+    'm|ANALYSE': [['Continuité', R`f \text{ continue en } x_0 \iff \lim_{x\to x_0} f(x)=f(x_0)`], ['Rolle', R`f(a)=f(b)\ \Rightarrow\ \exists c\in\,]a,b[,\ f'(c)=0`],
+      ['Taylor-Lagrange', R`|f(b)-T_n(b)|\le M_{n+1}\frac{|b-a|^{n+1}}{(n+1)!}`], ['Somme de Riemann', R`\frac{b-a}{n}\sum_{k=1}^{n}f\!\left(a+k\tfrac{b-a}{n}\right)\to\int_a^b f`]],
+    'm|ALGÈBRE': [['Polynômes', R`P(X)=\sum_{k=0}^n a_k X^k,\quad \deg P=n`], ['Division euclidienne', R`A=BQ+R,\quad \deg R<\deg B`],
+      ['Bézout', R`a\wedge b=1 \iff \exists (u,v)\in\mathbb{Z}^2,\ au+bv=1`], ['Matrice inverse', R`A^{-1}=\frac{1}{\det A}\,{}^t\mathrm{Com}(A)`]],
+    // ----- 2e année SP-ST -----
+    'spst|ANALYSE': [['Une limite classique', R`\lim_{n\to+\infty}\sum_{p=n+1}^{2n}\sin\!\left(\tfrac1p\right)=\ln 2`], ['Riemann', R`\sum\frac{1}{n^\alpha}\ \text{converge} \iff \alpha>1`],
+      ['Série entière', R`\frac{1}{1-x}=\sum_{n=0}^{+\infty}x^n,\quad |x|<1`], ['Équation linéaire', R`y'+a(x)y=0 \iff y=Ce^{-A(x)}`]],
+    'spst|ALGÈBRE': [['Déterminant', R`\det(AB)=\det(A)\det(B)`], ['Polynôme caractéristique', R`\chi_A(\lambda)=\det(\lambda I_n-A)`],
+      ['Diagonalisation', R`A=PDP^{-1}\iff E=\bigoplus_{\lambda}E_\lambda(A)`], ['Cauchy-Schwarz', R`|\langle x,y\rangle|\le\|x\|\,\|y\|`]],
+    // ----- 2e année SM -----
+    'sm|ANALYSE': [['Intégrale de Gauss', R`\int_{-\infty}^{+\infty}e^{-x^2}\,dx=\sqrt{\pi}`], ['Rayon (d’Alembert)', R`\left|\frac{a_{n+1}}{a_n}\right|\to\ell\ \Rightarrow\ R=\frac1\ell`],
+      ['Parseval', R`\frac{1}{2\pi}\int_0^{2\pi}|f|^2=\sum_{n\in\mathbb{Z}}|c_n(f)|^2`], ['Dérivation sous ∫', R`F'(x)=\int_I\frac{\partial f}{\partial x}(x,t)\,dt`]],
+    'sm|ALGÈBRE': [['Réduction', R`A=PDP^{-1},\quad D=\mathrm{diag}(\lambda_1,\dots,\lambda_n)`], ['Cayley-Hamilton', R`\chi_A(A)=0`],
+      ['Lemme des noyaux', R`P\wedge Q=1\ \Rightarrow\ \ker PQ(u)=\ker P(u)\oplus\ker Q(u)`], ['Théorème spectral', R`S\in\mathcal{S}_n(\mathbb{R})\Rightarrow S=PD\,{}^tP,\ P\in O_n(\mathbb{R})`]],
+    // ----- Divers cours -----
+    'ODE': [['Linéaire d’ordre 1', R`y'+p(x)y=q(x)`], ['Cauchy-Lipschitz', R`y'=f(t,y),\ y(t_0)=y_0`], ['Wronskien', R`W=\begin{vmatrix}y_1&y_2\\y_1'&y_2'\end{vmatrix}`], ['Exponentielle', R`Y'=AY\iff Y=e^{tA}Y_0`]],
+    'Measure theory': [['Mesure', R`\mu\Big(\bigsqcup_n A_n\Big)=\sum_n\mu(A_n)`], ['Intégrale', R`\int_A f\,d\mu`], ['Convergence dominée', R`|f_n|\le g\in L^1\Rightarrow\int f_n\to\int f`], ['Fatou', R`\int\liminf f_n\le\liminf\int f_n`]],
+    'Integration': [['Théorème fondamental', R`\int_a^b f(x)\,dx=F(b)-F(a)`], ['Changement de variable', R`\int_{\varphi(a)}^{\varphi(b)}f=\int_a^b f(\varphi(t))\varphi'(t)\,dt`], ['IPP', R`\int u v'=uv-\int u'v`], ['Fubini', R`\iint f=\int\!\Big(\int f\,dy\Big)dx`]],
+    'Calculus': [['Dérivée', R`f'(x)=\lim_{h\to0}\frac{f(x+h)-f(x)}{h}`], ['Produit', R`(uv)'=u'v+uv'`], ['Chaîne', R`(g\circ f)'=f'\cdot g'\circ f`], ['L’Hospital', R`\lim\frac fg=\lim\frac{f'}{g'}`]],
+    'Numerical analysis': [['Newton', R`x_{n+1}=x_n-\frac{f(x_n)}{f'(x_n)}`], ['Trapèzes', R`\int_a^b f\approx\frac{h}{2}\Big(f_0+2\sum_{k=1}^{n-1}f_k+f_n\Big)`], ['Euler explicite', R`y_{n+1}=y_n+h\,f(t_n,y_n)`], ['Point fixe', R`|g'|\le k<1\Rightarrow x_{n+1}=g(x_n)\to\ell`]],
+    'Differential equations': [['Équation', R`\frac{dy}{dx}+P(x)y=Q(x)`], ['Facteur intégrant', R`\mu(x)=e^{\int P(x)\,dx}`], ['Caractéristique', R`ar^2+br+c=0`], ['Variation de la constante', R`y=C(x)\,e^{-\int P}`]],
+    'Linear Algebra': [['Système', R`A\mathbf{x}=\mathbf{b}`], ['Rang', R`\mathrm{rank}A+\dim\ker A=n`], ['Valeur propre', R`A\mathbf{v}=\lambda\mathbf{v}`], ['Gram-Schmidt', R`e_k=\frac{u_k-\sum_{j<k}\langle u_k,e_j\rangle e_j}{\|\cdot\|}`]],
+    // ----- Bac -----
+    'Bac Économie et Gestion': [['Intérêts composés', R`C_n=C_0(1+t)^n`], ['Suite arithmétique', R`u_n=u_0+nr`], ['Suite géométrique', R`S=u_0\frac{1-q^{n+1}}{1-q}`], ['Moyenne', R`\bar x=\frac1N\sum n_i x_i`]],
+    "Bac Sciences de l'Informatique": [['Complexité', R`\mathcal{O}(n\log n)`], ['Somme', R`\sum_{k=1}^{n}k=\frac{n(n+1)}{2}`], ['Binaire', R`\overline{1011}^{2}=11`], ['Récurrence', R`u_{n+1}=f(u_n)`]],
+    'Bac Sciences Techniques': [['Dérivée de ln', R`(\ln u)'=\frac{u'}{u}`], ['Primitive', R`\int e^{ax}dx=\frac{e^{ax}}{a}+C`], ['Complexe', R`|z|^2=z\bar z`], ['Équation', R`y'=ay\iff y=Ce^{ax}`]],
+    'Bac Sciences Expérimentales': [['Exponentielle', R`(e^u)'=u'e^u`], ['Logarithme', R`\ln(ab)=\ln a+\ln b`], ['Probabilité', R`P(A\cap B)=P(A)P_A(B)`], ['Aire', R`\mathcal{A}=\int_a^b|f(x)|\,dx`]],
+    'Bac Mathématiques': [['Euler', R`e^{i\theta}=\cos\theta+i\sin\theta`], ['Moivre', R`(\cos\theta+i\sin\theta)^n=\cos n\theta+i\sin n\theta`], ['Gauss', R`a\mid bc,\ a\wedge b=1\Rightarrow a\mid c`], ['Binomiale', R`P(X=k)=\binom nk p^k(1-p)^{n-k}`]],
+    licence: [['Cauchy', R`\forall\varepsilon,\exists N,\ p,q\ge N\Rightarrow d(u_p,u_q)<\varepsilon`], ['Borel-Lebesgue', R`K\subset\mathbb{R}^n \text{ compact}\iff \text{fermé borné}`], ['Fourier', R`\hat f(\xi)=\int_{\mathbb{R}}f(x)e^{-2i\pi x\xi}dx`], ['Stokes', R`\int_{\partial\Omega}\omega=\int_\Omega d\omega`]]
+  };
+  const CLS = { p_classe_pt:'pt', ds_pt:'pt', p_classe_m:'m', ds_m:'m', d_classe_spst:'spst', ds_spst:'spst', d_classe_sm:'sm', ds_sm:'sm' };
+  const DOT = ['#fde68a', '#86efac', '#f9a8d4', '#a5b4fc'];
+
+  function setFor() {
+    let fo = null, su = null;
+    try { fo = activeFolder; su = activeSub; } catch (e) {}
+    if (document.body.classList.contains('home-on')) {
+      try { const hv = document.getElementById('homeView'); if (hv && !hv.querySelector('.hm-crumbs')) return F.home; } catch (e) {}
+    }
+    let view = ''; try { view = currentView; } catch (e) {}
+    if (view === 'board' || view === 'visio') return F.home;
+    if (fo === 'licence') return F.licence;
+    if (fo && CLS[fo]) return F[CLS[fo] + '|' + (su || 'ANALYSE')] || F[CLS[fo] + '|ANALYSE'];
+    if (su && F[su]) return F[su];
+    return F.home;
+  }
+  let lastKey = '';
+  function render() {
+    const banner = document.querySelector('.banner'); if (!banner) return;
+    let box = document.getElementById('ccBF');
+    if (!box) { box = document.createElement('div'); box.id = 'ccBF'; banner.appendChild(box); }
+    const set = setFor(), key = set.map(x => x[1]).join('|');
+    if (key === lastKey) return; lastKey = key;
+    box.innerHTML = set.slice(0, 4).map((x, i) => `<div class="bf" style="--dot:${DOT[i]}"><small><i></i>${x[0]}</small><div class="fx"></div></div>`).join('');
+    box.querySelectorAll('.fx').forEach((el, i) => { try { katex.render(set[i][1], el, { throwOnError:false, displayMode:false }); } catch (e) { el.textContent = set[i][1]; } });
+  }
+  // Mise à jour à chaque changement de page (titre du bandeau modifié)
+  const start = () => {
+    const t = document.getElementById('bannerTitle'); if (!t || typeof katex === 'undefined') return false;
+    new MutationObserver(() => setTimeout(render, 30)).observe(t, { childList:true, characterData:true, subtree:true });
+    const hv = document.getElementById('homeView'); if (hv) new MutationObserver(() => setTimeout(render, 30)).observe(hv, { childList:true });
+    render(); return true;
+  };
+  const iv = setInterval(() => { if (start()) clearInterval(iv); }, 800);
+  setInterval(render, 4000);   // filet de sécurité (changement de matière sans changement de titre)
 })();
 </script>
 </body>
