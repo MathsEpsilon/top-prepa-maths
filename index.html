@@ -7631,7 +7631,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
 </script>
 
 <!-- =====================================================================
-     V14 — 12 NOUVELLES OPTIONS
+     V14 — NOUVELLES OPTIONS (sans communication professeur ↔ élèves)
      1 Annonces du prof · 2 Calendrier des DS · 3 Partage de document (lien / WhatsApp)
      4 Question au prof · 5 Objectif du jour · 6 Emploi du temps · 7 Défi calcul chrono
      8 Quiz à partir des fiches · 9 Brouillon LaTeX · 10 Glossaire FR/EN/AR
@@ -7652,7 +7652,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
 .an-item .tx { font-size:14.5px; white-space:pre-wrap; line-height:1.5; }
 .an-item .dl { display:inline-block; margin-top:6px; font-size:12.5px; font-weight:800; color:var(--c); background:color-mix(in srgb, var(--c) 12%, transparent); border-radius:99px; padding:2px 10px; }
 .an-item .x { float:right; border:none; background:transparent; cursor:pointer; color:var(--gris); }
-.hm-extra { display:grid; grid-template-columns:minmax(260px, 1fr) minmax(260px, 1.4fr) minmax(220px, 1fr); gap:16px; margin:4px 0 6px; }
+.hm-extra { display:grid; grid-template-columns:minmax(280px, 1fr) minmax(280px, 1.4fr); gap:16px; margin:4px 0 6px; }
 .hm-card { background:var(--carte); border:1px solid var(--bord); border-radius:18px; padding:14px 16px; box-shadow:var(--ombre); min-width:0; }
 .hm-card h5 { font-size:13px; font-weight:800; color:var(--gris); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
 .hm-card h5 button { border:none; background:transparent; color:var(--bleu2); font-weight:800; cursor:pointer; font-size:12px; text-transform:none; letter-spacing:0; }
@@ -7835,7 +7835,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     w.onclick = () => { const c = UI.current(); if (c) window.open('https://wa.me/?text=' + encodeURIComponent('📕 ' + c.name + ' — ' + docLink(c.id)), '_blank', 'noopener'); };
     const q = document.createElement('button'); q.className = 'tool-btn'; q.id = 'ccPvAsk'; q.textContent = '💬';
     q.onclick = () => { const c = UI.current(); askTeacher(c ? c.name : null); };
-    tools.insertBefore(q, tools.firstChild); tools.insertBefore(w, tools.firstChild); tools.insertBefore(s, tools.firstChild);
+    tools.insertBefore(s, tools.firstChild);
   }
 
   /* ====================== 5. OBJECTIF DU JOUR ====================== */
@@ -7899,7 +7899,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     // Aujourd'hui
     const tt = LS.get(ttKey(), []).filter(s => s.d === todayIdx()).sort((a, b) => a.a.localeCompare(b.a));
     const ttCard = `<div class="hm-card"><h5>📅 ${t('ttToday')} <button data-hx="tt">✏️</button></h5><div class="tt-today">${tt.length ? tt.map(s => `<div class="tt-slot" style="--c:${s.c}"><span>${esc(s.a)}–${esc(s.b)}</span>${esc(s.l)}</div>`).join('') : `<div style="color:var(--gris);font-size:13.5px">${t('ttEmpty')}</div>`}</div></div>`;
-    box.innerHTML = goalCard + annCard + ttCard;
+    box.innerHTML = goalCard + ttCard;
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-hx]'); if (!b) return; if (b.dataset.hx === 'ann') openAnn(); else openTT(); });
   const hvObs = new MutationObserver(() => { const hv = $('homeView'); if (hv && hv.style.display === 'block' && !$('ccHomeExtra')) refreshHome(); });
@@ -8076,9 +8076,9 @@ body.nav-icons #zoomWidget { left:110px !important; }
   /* ====================== BOÎTE À OUTILS ====================== */
   function tiles() {
     const T = [
-      ['📢', 'ann', openAnn, ['#1d4ed8', '#60a5fa'], unread()], ['📅', 'tt', openTT, ['#047857', '#34d399']], ['🏋️', 'chal', () => openChal('sprint'), ['#b45309', '#fbbf24']],
+      ['📅', 'tt', openTT, ['#047857', '#34d399']], ['🏋️', 'chal', () => openChal('sprint'), ['#b45309', '#fbbf24']],
       ['🎲', 'quiz', () => openChal('quiz'), ['#6d28d9', '#a78bfa']], ['🗒️', 'draft', () => { UI.closeAll(); openDraft(); }, ['#334155', '#94a3b8']], ['📖', 'gloss', openGloss, ['#0e7490', '#22d3ee']],
-      ['🖨️', 'printC', printCards, ['#9d174d', '#f472b6']], ['📝', 'printN', printNotes, ['#7c2d12', '#fb923c']], ['💬', 'ask', () => askTeacher(null), ['#15803d', '#4ade80']]
+      ['🖨️', 'printC', printCards, ['#9d174d', '#f472b6']], ['📝', 'printN', printNotes, ['#7c2d12', '#fb923c']]
     ];
     if (isAdmin()) T.push(['📊', 'csv', exportCSV, ['#1e293b', '#64748b']]);
     return T;
@@ -8097,14 +8097,13 @@ body.nav-icons #zoomWidget { left:110px !important; }
 
   /* ====================== Intégration : barre, palette, réglages ====================== */
   window.ccRailExtra = ['sep',
-    { k:'ann14', i:'📢', label:() => t('ann'), run:openAnn },
     { k:'box14', i:'🧰', label:() => L() === 'en' ? 'Tools' : 'Outils +', run:openBox }];
   function updateBadges() {
     const b = document.querySelector('#ccRail [data-rl="ann14"]'); if (!b) return;
     let s = b.querySelector('.b'); const n = unread();
     if (n && !isAdmin()) { if (!s) { s = document.createElement('span'); s.className = 'b'; b.appendChild(s); } s.textContent = n; } else if (s) s.remove();
   }
-  setInterval(updateBadges, 2000);
+
   const prevActs = window.ccExtraActions;
   window.ccExtraActions = () => (prevActs ? prevActs() : []).concat(tiles().map(([i, k, run]) => ({ ic:i, l:t(k), run })).concat([{ ic:'🧰', l:t('box'), run:openBox }]));
   const prevSet = window.ccExtraSettings;
@@ -8113,7 +8112,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
   window.ccApplyExtra = p => { if (prevApply) prevApply(p); setTimeout(nightCheck, 0); };
   if (typeof loginAs === 'function') {
     const _la = loginAs;
-    window.loginAs = function () { const r = _la.apply(this, arguments); setTimeout(() => { listenAnn(); openFromHash(); refreshHome(); }, 200); return r; };
+    window.loginAs = function () { const r = _la.apply(this, arguments); setTimeout(() => { openFromHash(); refreshHome(); }, 200); return r; };
   }
   if (typeof toggleLang === 'function') { const _tl = toggleLang; window.toggleLang = function () { const r = _tl.apply(this, arguments); const x = $('ccHomeExtra'); if (x) x.remove(); refreshHome(); return r; }; }
   function init14() {
