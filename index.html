@@ -3334,12 +3334,19 @@ function movePdfInList(list, idx, dir) {
 
 function addPdfs(filesList) {
   if (!filesList || filesList.length === 0) return;
-  const arr = Array.from(filesList);
-  if (typeof window.ccNamePrompt === 'function' && currentUser && currentUser.role === 'admin') {
-    window.ccNamePrompt(arr).then(names => { if (names) addPdfsRaw(arr, names); document.getElementById('pdfInput').value = ''; });
-    return;
-  }
-  addPdfsRaw(arr);
+  const isAdm = currentUser && currentUser.role === 'admin';
+  const go = arr => {
+    if (!arr || !arr.length) { document.getElementById('pdfInput').value = ''; return; }
+    if (typeof window.ccNamePrompt === 'function' && isAdm) {
+      window.ccNamePrompt(arr).then(names => { if (names) addPdfsRaw(arr, names); document.getElementById('pdfInput').value = ''; });
+      return;
+    }
+    addPdfsRaw(arr);
+  };
+  const arr0 = Array.from(filesList);
+  // ✂️ PDF de plus de 700 Ko : découpage automatique en plusieurs parties
+  if (typeof window.ccSplitBig === 'function' && isAdm && arr0.some(f => f.size > 700 * 1024)) { window.ccSplitBig(arr0).then(go); return; }
+  go(arr0);
 }
 function addPdfsRaw(filesList, names) {
   if(!filesList || filesList.length === 0) return;
@@ -8370,7 +8377,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     equivalents:'équivalents', equivalence:'équivalence', revision:'révision', revisions:'révisions', resume:'résumé', complements:'compléments', complement:'complément' };
   const STOP = new Set(['serie','series','td','ds','devoir','devoirs','surveille','surveilles','examen','exam','exams','cours','chapitre','chap','ch','corrige','corriges','corrigee','corrigees',
     'correction','corr','solution','solutions','sol','enonce','enonces','sujet','n','no','num','numero','final','finale','v','copie','copy','pdf','scan','version','sm','m','pt','pc','spst','sp','st','mp',
-    'ipein','analyse','alg','algebre','classe','prepa','annee','session','principale','controle','rattrapage','partiel','tpm','new','nouveau']);
+    'ipein','analyse','alg','algebre','classe','prepa','annee','session','principale','controle','rattrapage','partiel','tpm','new','nouveau','partie','part','sur']);
   const SMALL = new Set(['et','de','du','des','la','le','les','d','l','a','en','sur']);
   const deacc = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -8380,6 +8387,8 @@ body.nav-icons #zoomWidget { left:110px !important; }
     const src = deacc(raw + ' ' + (text || '').slice(0, 1500));
     const fileOnly = deacc(raw);
     const info = {};
+    const pm = deacc(raw).match(/partie\s*(\d+)\s*(?:sur|\/)\s*(\d+)/);
+    if (pm) info.part = pm[1] + '/' + pm[2];
     const numRe = /(?:serie|td|ds|devoir(?:\s+surveille)?|homework|hw|probleme|cours|chapitre|chap|ch)[\s_\-.]*(?:n\s*[°o]?|no|num(?:ero)?)?[\s_\-.:]*(\d{1,2})(?!\d)/;
     let m = fileOnly.match(numRe) || src.match(numRe);
     if (m) info.num = parseInt(m[1], 10);
@@ -8391,7 +8400,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     else if (/session\s+principale|principale/.test(src)) info.session = 'Session principale';
     else if (/partiel/.test(src)) info.session = 'Partiel';
     // Sujet / thème : mots restants du nom de fichier
-    let words = raw.replace(/[_\-.+()\[\]]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').split(/\s+/).filter(Boolean)
+    let words = raw.replace(/partie\s*\d+\s*(?:sur|\/)\s*\d+/gi, ' ').replace(/[_\-.+()\[\]]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').split(/\s+/).filter(Boolean)
       .filter(w => { const d = deacc(w); return !STOP.has(d) && !/^\d+$/.test(d) && !/^(n|no)\d+$/.test(d) && !/^(serie|td|ds|ch|chap|devoir)\d+$/.test(d) && !/^20\d\d$/.test(d) && d.length > 1; });
     while (words.length && SMALL.has(deacc(words[0]))) words.shift();
     while (words.length && SMALL.has(deacc(words[words.length - 1]))) words.pop();
@@ -8420,6 +8429,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     if ((type === 'DS' || type === 'Examen' || type === 'Devoir') && ctx.withYear) parts.push(info.year || ctx.year);
     let n = parts.filter(Boolean).join(' — ').replace(/\s+/g, ' ').trim();
     if (info.corrige) n += ' (corrigé)';
+    if (info.part) n += ' — partie ' + info.part;
     return n + '.pdf';
   }
   function uniq(names, taken) {
@@ -8569,6 +8579,54 @@ body.nav-icons #zoomWidget { left:110px !important; }
   }
   if (typeof loadFiles === 'function') { const _lf = loadFiles; window.loadFiles = function () { const r = _lf.apply(this, arguments); try { ensureBtn(); } catch (e) {} return r; }; }
   document.addEventListener('DOMContentLoaded', ensureBtn); setTimeout(ensureBtn, 1500);
+  /* ---------- 3) Découpage automatique des PDF de plus de 700 Ko ---------- */
+  const LIMIT = 700 * 1024;
+  let pdfLibP = null;
+  function pdfLib() {
+    if (window.PDFLib) return Promise.resolve(window.PDFLib);
+    return pdfLibP || (pdfLibP = new Promise((res, rej) => {
+      const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+      sc.onload = () => res(window.PDFLib); sc.onerror = rej; document.head.appendChild(sc);
+    }));
+  }
+  async function extract(L, src, from, to) {
+    const out = await L.PDFDocument.create();
+    const idx = []; for (let i = from; i < to; i++) idx.push(i);
+    (await out.copyPages(src, idx)).forEach(p => out.addPage(p));
+    return out.save({ useObjectStreams:true });
+  }
+  // Coupe en deux, puis recoupe chaque moitié tant qu'elle dépasse 700 Ko
+  async function cut(L, src, from, to, acc, bad) {
+    const bytes = await extract(L, src, from, to);
+    if (bytes.length <= LIMIT) { acc.push({ from, to, bytes }); return; }
+    if (to - from <= 1) { bad.push(from + 1); acc.push({ from, to, bytes, tooBig:true }); return; }
+    const mid = Math.ceil((from + to) / 2);
+    await cut(L, src, from, mid, acc, bad); await cut(L, src, mid, to, acc, bad);
+  }
+  window.ccSplitBig = async function (files) {
+    let L; try { L = await pdfLib(); } catch (e) { alert('Impossible de charger l’outil de découpage (pdf-lib). Vérifiez la connexion.'); return files; }
+    const out = [];
+    for (const f of files) {
+      if (f.size <= LIMIT) { out.push(f); continue; }
+      showToast(`✂️ Découpage de « ${f.name} »…`);
+      try {
+        const src = await L.PDFDocument.load(new Uint8Array(await f.arrayBuffer()), { ignoreEncryption:true });
+        const n = src.getPageCount(), acc = [], bad = [];
+        await cut(L, src, 0, n, acc, bad);
+        if (bad.length) {
+          alert(`« ${f.name} » : la page ${bad.join(', ')} pèse à elle seule plus de 700 Ko (image lourde ?). Compressez le PDF puis réessayez. Ce fichier n’est pas ajouté.`);
+          continue;
+        }
+        const base = f.name.replace(/\.pdf$/i, '');
+        acc.forEach((p, k) => out.push(new File([p.bytes], `${base} partie ${k + 1} sur ${acc.length}.pdf`, { type:'application/pdf' })));
+        showToast(`✂️ « ${f.name} » → ${acc.length} parties (${acc.map(p => p.to - p.from + ' p.').join(' + ')})`);
+      } catch (e) {
+        console.error(e); alert(`Impossible de découper « ${f.name} » (PDF protégé ou abîmé ?). Ce fichier n’est pas ajouté.`);
+      }
+    }
+    return out;
+  };
+
   window.ccOrganizeNames = organize; window.ccAnalyseName = analyse; window.ccBuildName = build;
 })();
 </script>
