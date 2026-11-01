@@ -980,8 +980,8 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
       <h1><span data-i18n="siteTitle">Top Prepa Maths</span><small id="brandSub">C.C</small></h1>
     </div>
     <div class="presence">
-      <span><span class="dot">●</span> <span id="onlineNow">1</span> <span data-i18n="onlineTxt">en ligne maintenant</span></span>
-      <small>👥 <span id="totalUsers">0</span> <span data-i18n="regTxt">étudiant(s) inscrit(s)</span></small>
+      <span title="Connectés en ce moment"><span class="dot">●</span> <span id="onlineNow">1</span> <span data-i18n="onlineTxt">en ligne maintenant</span></span>
+      <small title="Étudiants inscrits">👥 <span id="totalUsers">0</span> <span data-i18n="regTxt">étudiant(s) inscrit(s)</span></small>
     </div>
     <button class="btn-lang2" id="langBtn" onclick="toggleLang()">EN</button>
     <button class="btn-sub" id="subBtn" onclick="openSubscriptionPanel()" style="display:none">🔓 Mon abonnement</button>
@@ -7496,6 +7496,13 @@ body.tiles-xl .hm-tt b { font-size:23px; }
 .hm-lock { position:absolute; top:14px; right:14px; z-index:2; font-size:18px; }
 .hm-news { display:flex; flex-direction:column; gap:10px; }
 
+/* ---------- En-tête : connectés + inscrits visibles par tous ---------- */
+header .presence { flex-direction:row !important; align-items:center !important; gap:10px !important; white-space:nowrap; }
+header .presence small { display:inline-flex !important; align-items:center; gap:4px; font-size:12.5px; font-weight:700 !important; color:#fff !important; opacity:.95;
+  padding-left:10px; border-left:1px solid rgba(255,255,255,.3); }
+@media (max-width:1180px) { header .presence [data-i18n="regTxt"] { display:none; } }
+@media (max-width:1000px) { header .presence [data-i18n="onlineTxt"] { display:none; } }
+@media (max-width:860px) { header .presence { gap:7px !important; padding:5px 9px !important; } header .presence small { padding-left:7px; } }
 /* ---------- Statistiques par section ---------- */
 .sec-stats { display:flex; flex-direction:column; gap:7px; margin-bottom:6px; }
 .sec-bar { display:grid; grid-template-columns:96px 1fr 30px; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--texte); }
