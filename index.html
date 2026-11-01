@@ -1188,6 +1188,52 @@ if (typeof firebase === 'undefined') {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+/* =====================================================================
+   📦 CONTENU DES PDF SÉPARÉ DE LA LISTE
+   Avant : chaque document de « files » contenait le PDF entier (base64).
+   Ouvrir le site téléchargeait donc TOUS les PDF (plusieurs centaines de Mo),
+   ce qui bloquait les téléphones. Désormais :
+     files/{id}     → seulement les infos (nom, dossier, taille, date…)
+     fileData/{id}  → le contenu du PDF, chargé uniquement à l'ouverture
+   Les anciens documents sont convertis automatiquement par l'administrateur.
+   ===================================================================== */
+function ccWithContent(doc) {
+  if (!doc || !doc.exists) return Promise.resolve(doc);
+  const base = doc.data() || {};
+  if (base.content) return Promise.resolve(doc);
+  return db.collection('fileData').doc(doc.id).get().then(fd => {
+    const merged = Object.assign({}, base, { content: fd.exists ? fd.data().content : '' });
+    return { exists: true, id: doc.id, ref: doc.ref, data: () => merged };
+  });
+}
+function ccAddFile(obj) {
+  const content = obj.content, meta = Object.assign({}, obj); delete meta.content;
+  const ref = db.collection('files').doc();
+  // le contenu d'abord, puis la fiche : un document listé a toujours son PDF
+  return db.collection('fileData').doc(ref.id).set({ content }).then(() => ref.set(meta)).then(() => ref);
+}
+function ccDeleteFileData(id) { return db.collection('fileData').doc(id).delete().catch(() => {}); }
+let ccMigrating = false;
+function ccMigrateFiles(docs) {
+  if (ccMigrating || !(typeof isAdminNow === 'function' && isAdminNow())) return;
+  const todo = docs.filter(d => d.content).map(d => ({ id: d.id, content: d.content }));
+  if (!todo.length) return;
+  ccMigrating = true;
+  let k = 0;
+  const say = m => { try { showToast(m); } catch (e) {} };
+  say(`⚙️ Optimisation des documents pour les téléphones : 0 / ${todo.length}…`);
+  const next = () => {
+    if (k >= todo.length) { ccMigrating = false; say(`✅ Optimisation terminée : ${todo.length} document(s). Le site est maintenant léger sur téléphone.`); return; }
+    const f = todo[k];
+    db.collection('fileData').doc(f.id).set({ content: f.content })
+      .then(() => db.collection('files').doc(f.id).update({ content: firebase.firestore.FieldValue.delete() }))
+      .then(() => { k++; if (k % 10 === 0) say(`⚙️ Optimisation des documents : ${k} / ${todo.length}…`); setTimeout(next, 150); })
+      .catch(err => { ccMigrating = false; console.error('Migration fileData :', err);
+        say(err.code === 'permission-denied' ? '⚠️ Optimisation bloquée : ajoutez la règle « fileData » dans Firestore.' : '⚠️ Optimisation interrompue : ' + (err.message || err)); });
+  };
+  next();
+}
+
 /* ================= Langue (FR / EN) ================= */
 let lang = localStorage.getItem('rp_lang') || 'fr';
 const I18N = {
@@ -2470,7 +2516,9 @@ function startRealtimeListeners() {
       total += (d.downloads || 0);
       // Copie légère (sans le contenu base64) pour la recherche et les badges
       all.push({ id: doc.id, name: d.name, path: d.path, downloads: d.downloads || 0, views: d.views || 0, ts: d.ts || 0, date: d.date || '', size: d.size || '' });
+      if (d.content && isAdminNow()) (window._ccToMigrate = window._ccToMigrate || {})[doc.id] = d.content;
     });
+    if (window._ccToMigrate) { const m = window._ccToMigrate; window._ccToMigrate = null; ccMigrateFiles(Object.keys(m).map(id => ({ id, content: m[id] }))); }
     window._allFilesRaw = all;
     window.allFiles = all.filter(f => pathAllowed(f.path));  // ✅ Seulement la section de l'étudiant
     ensureSeenInit();
@@ -2717,7 +2765,7 @@ function goToFile(f) {
 
 /* ================= Aperçu PDF côte à côte ================= */
 function previewPdf(id, name) {
-  db.collection('files').doc(id).get().then(doc => {
+  db.collection('files').doc(id).get().then(ccWithContent).then(doc => {
     if (!doc.exists) return;
     const data = doc.data();
     if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
@@ -3163,7 +3211,7 @@ function renderAccordion() {
       if (!confirm(dupes.length + ' doublon(s) trouvé(s) dans la base. Les supprimer définitivement ?')) return;
       const batch = db.batch();
       dupes.forEach(id => batch.delete(db.collection('files').doc(id)));
-      batch.commit().then(() => { showToast('Doublons supprimés'); loadFiles(); });
+      batch.commit().then(() => { dupes.forEach(ccDeleteFileData); showToast('Doublons supprimés'); loadFiles(); });
     };
     fContainer.appendChild(clean);
   }
@@ -3517,7 +3565,7 @@ function addPdfsRaw(filesList, names) {
         newDoc.chapter = effectiveChapterId;
       }
 
-      db.collection('files').add(newDoc).then(() => {
+      ccAddFile(newDoc).then(() => {
         showToast("Fichier ajouté !");
         loadFiles();
       }).catch(err => {
@@ -3597,7 +3645,7 @@ function startSubscription() {
 ================================================= */
 
 function downloadPdf(id, name) {
-  db.collection('files').doc(id).get().then(doc => {
+  db.collection('files').doc(id).get().then(ccWithContent).then(doc => {
     if(!doc.exists) return;
     const data = doc.data();
     if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
@@ -3624,6 +3672,7 @@ function downloadPdf(id, name) {
 function deletePdf(id) {
   if(confirm("Supprimer définitivement ce fichier ?")) {
     db.collection('files').doc(id).delete().then(() => {
+      ccDeleteFileData(id);
       showToast("Fichier supprimé");
       loadFiles();
     });
@@ -3734,7 +3783,7 @@ function exportBoardPDF() {
     const dataUri = pdf.output('datauristring');
     // ⚠️ Un document Firestore ne peut pas dépasser 1 Mo (1 048 576 octets) au total
     if (dataUri.length > 1000 * 1024) { alert('Tableau trop volumineux pour être publié (limite technique ~1 Mo). Simplifiez le dessin ou réduisez sa taille.'); return; }
-    db.collection('files').add({
+    ccAddFile({
       name: fname,
       path: map[choix][0] + '_' + map[choix][1] + '_Cours',
       size: (dataUri.length / 1048576).toFixed(2) + ' Mo',
@@ -7259,7 +7308,7 @@ body.pg-noarrows .pg-arrow { display:none; }
     if (!labeled.length) { pdf.save(fileName()); return; }
     const choice = prompt(t('folder') + '\n' + labeled.map(([, l], i) => (i + 1) + ' = ' + l).join('\n'), '1');
     const k = parseInt(choice, 10) - 1; if (!(k >= 0 && k < labeled.length)) return;
-    db.collection('files').add({
+    ccAddFile({
       name:fileName(), path:labeled[k][0], size:(uri.length / 1048576).toFixed(2) + ' Mo', date:new Date().toLocaleDateString('fr-FR'),
       downloads:0, views:0, ts:Date.now(), order:1e6, content:uri
     }).then(() => toast(t('published') + ' « ' + labeled[k][1] + ' »')).catch(e => { onErr(e); alert(e.message || e); });
@@ -7310,7 +7359,7 @@ body.pg-noarrows .pg-arrow { display:none; }
     } catch (e) { console.error(e); toast('⚠️ ' + t('loadErr')); }
   }
   async function importSiteFile(id) {
-    try { const d = await db.collection('files').doc(id).get(); if (!d.exists || !pathAllowed(d.data().path)) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
+    try { const d = await ccWithContent(await db.collection('files').doc(id).get()); if (!d.exists || !pathAllowed(d.data().path)) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
     catch (e) { onErr(e); toast('⚠️ ' + t('loadErr')); }
   }
   function sharePdf(id, name) {
@@ -7346,7 +7395,7 @@ body.pg-noarrows .pg-arrow { display:none; }
   async function openShared() {
     const p = state && state.pdf; if (!p) return;
     try {
-      const d = await db.collection('files').doc(p.id).get(); if (!d.exists || !pathAllowed(d.data().path)) return;
+      const d = await ccWithContent(await db.collection('files').doc(p.id).get()); if (!d.exists || !pathAllowed(d.data().path)) return;
       const bytes = dataUriToBytes(d.data().content);
       if (frameUrl) URL.revokeObjectURL(frameUrl);
       frameUrl = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
@@ -8764,7 +8813,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
         const b = $('nmRead'); b.disabled = true;
         for (let i = 0; i < rows.length; i++) {
           b.textContent = `📖 Lecture ${i + 1}/${rows.length}…`;
-          try { const d = await db.collection('files').doc(rows[i].id).get(); const by = d.exists ? uriBytes(d.data().content) : null;
+          try { const d = await ccWithContent(await db.collection('files').doc(rows[i].id).get()); const by = d.exists ? uriBytes(d.data().content) : null;
             if (by) { const txt = await firstPageText(by); rows[i].info = analyse(rows[i].old, txt); delete rows[i].edited; } } catch (e) {}
         }
         b.textContent = '📖 Contenu lu ✓'; render();
