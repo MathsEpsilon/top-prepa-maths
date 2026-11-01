@@ -1270,6 +1270,11 @@ const STRUCTURE = [
   { type: 'year', txt: 'DEUXIÈME ANNÉE', groups: ['prepa', 'admin'] },
   { type: 'folder', id: 'd_classe_spst', txt: 'Classe SP-ST', sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
   { type: 'folder', id: 'd_classe_sm', txt: 'Classe SM', sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
+  { type: 'title', txt: '📝 DEVOIRS SURVEILLÉS & EXAMENS', groups: ['prepa', 'admin'] },
+  { type: 'folder', id: 'ds_pt',   exam: true, fil: 'Classe P-T',   txt: 'DS & Examens — P-T',   sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
+  { type: 'folder', id: 'ds_m',    exam: true, fil: 'Classe M',     txt: 'DS & Examens — M',     sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
+  { type: 'folder', id: 'ds_spst', exam: true, fil: 'Classe SP-ST', txt: 'DS & Examens — SP-ST', sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
+  { type: 'folder', id: 'ds_sm',   exam: true, fil: 'Classe SM',    txt: 'DS & Examens — SM',    sub: ['ANALYSE', 'ALGÈBRE'], groups: ['prepa', 'admin'] },
   { type: 'title', txt: 'Licence (Mathématiques)', id: 'licence', groups: ['prepa', 'admin'] },
   { type: 'folder', id: 'divers_main', txt: 'Divers cours', sub: ['ODE', 'Measure theory', 'Integration', 'Calculus', 'Numerical analysis', 'Differential equations', 'Linear Algebra'], groups: ['prepa', 'saudi', 'admin'] },
   { type: 'title', txt: '🎓 Baccalauréat', groups: ['prepa', 'saudi', 'admin'] },
@@ -1286,6 +1291,15 @@ const REGIONS = {
 const SUB_CATEGORIES = ['Cours', 'Séries corrigées', 'TD', 'Devoirs corrigés'];
 const DIVERS_CATEGORIES = ['Cours', 'Exercices corrigés', 'Homework'];
 const BAC_CATEGORIES = ['Résumé de cours', 'Exercices corrigés', 'Problème corrigé', 'Ancien sujet corrigé'];
+const EXAM_CATEGORIES = ['Devoir surveillé', 'Examen'];
+const EXAM_FOLDERS = ['ds_pt', 'ds_m', 'ds_spst', 'ds_sm'];
+function leafCatsFor(fid) {
+  fid = String(fid || '');
+  if (EXAM_FOLDERS.includes(fid)) return EXAM_CATEGORIES;
+  if (fid.includes('divers_main')) return DIVERS_CATEGORIES;
+  if (fid.includes('bac_main')) return BAC_CATEGORIES;
+  return SUB_CATEGORIES;
+}
 
 /* Traductions des sous-catégories saoudiennes */
 const SAUDI_TRANSLATIONS = {
@@ -1305,10 +1319,10 @@ const LEGACY_FOLDERS = {
 };
 /* ================= Sections : chaque étudiant n'accède qu'à sa classe ================= */
 const SECTIONS = {
-  pcpt:  { label:'PC-PT (1re année)', folders:['p_classe_pt','p_classe_p','p_classe_t'] },
-  m:     { label:'M (1re année)',     folders:['p_classe_m'] },
-  spst:  { label:'SP-ST (2e année)',  folders:['d_classe_spst','d_classe_sp','d_classe_st'] },
-  sm:    { label:'SM (2e année)',     folders:['d_classe_sm'] },
+  pcpt:  { label:'PC-PT (1re année)', folders:['p_classe_pt','p_classe_p','p_classe_t','ds_pt'] },
+  m:     { label:'M (1re année)',     folders:['p_classe_m','ds_m'] },
+  spst:  { label:'SP-ST (2e année)',  folders:['d_classe_spst','d_classe_sp','d_classe_st','ds_spst'] },
+  sm:    { label:'SM (2e année)',     folders:['d_classe_sm','ds_sm'] },
   autre: { label:'Autre (Bac, Licence…)', folders:[] }
 };
 // false : l'étudiant voit sa section + les dossiers communs (Divers, Bac, Licence, tableau blanc, live)
@@ -1357,7 +1371,7 @@ function pathKeysFor(folder, sub, leaf) {
   (LEGACY_FOLDERS[folder] || []).forEach(old => keys.push(`${old}_${sub}_${leaf}`));
   return keys;
 }
-const ALL_FOLDER_IDS = ['p_classe_pt','p_classe_p','p_classe_t','p_classe_m','d_classe_spst','d_classe_sp','d_classe_st','d_classe_sm','divers_main','bac_main'];
+const ALL_FOLDER_IDS = ['p_classe_pt','p_classe_p','p_classe_t','p_classe_m','d_classe_spst','d_classe_sp','d_classe_st','d_classe_sm','divers_main','bac_main','ds_pt','ds_m','ds_spst','ds_sm'];
 function parsePath(p) {
   if (p === 'licence__') return { folder:'licence', sub:'', leaf:'' };
   for (const f of ALL_FOLDER_IDS) {
@@ -1419,7 +1433,11 @@ const NAV_EN = {
   'Résumé de cours': 'Course summary',
   'Exercices corrigés': 'Solved exercises',
   'Problème corrigé': 'Solved problem',
-  'Ancien sujet corrigé': 'Past exam solution'
+  'Ancien sujet corrigé': 'Past exam solution',
+  '📝 DEVOIRS SURVEILLÉS & EXAMENS': '📝 TESTS & EXAMS',
+  'DS & Examens — P-T': 'Tests & Exams — P-T', 'DS & Examens — M': 'Tests & Exams — M',
+  'DS & Examens — SP-ST': 'Tests & Exams — SP-ST', 'DS & Examens — SM': 'Tests & Exams — SM',
+  'Devoir surveillé': 'Supervised test', 'Examen': 'Exam'
 };
 const trNav = s => {
   if (SAUDI_TRANSLATIONS[s]) return SAUDI_TRANSLATIONS[s][lang] || SAUDI_TRANSLATIONS[s].fr;
@@ -2431,7 +2449,7 @@ function buildSidebar() {
             activeFolder = item.id;
             activeSub = subName;
             // ✅ Pour les dossiers saoudiens, pas de "feuilles" supplémentaires
-            activeLeaf = (item.id.includes('saudi')) ? subName : (item.id.includes('bac_main') ? BAC_CATEGORIES[0] : SUB_CATEGORIES[0]);
+            activeLeaf = (item.id.includes('saudi')) ? subName : leafCatsFor(item.id)[0];
             buildSidebar();
             loadFiles();
           };
@@ -2440,7 +2458,7 @@ function buildSidebar() {
           // ✅ Afficher les feuilles SEULEMENT si cette sous-catégorie est ouverte, et pour les dossiers non-saoudiens
           if(openSubs[subKey] && !item.id.includes('saudi')) {
             // ✅ Utiliser DIVERS_CATEGORIES pour les dossiers "divers", BAC_CATEGORIES pour le dossier "Bac"
-            const leafCategories = item.id.includes('divers_main') ? DIVERS_CATEGORIES : (item.id.includes('bac_main') ? BAC_CATEGORIES : SUB_CATEGORIES);
+            const leafCategories = leafCatsFor(item.id);
             leafCategories.forEach(leaf => {
               const lDiv = document.createElement('div');
               lDiv.className = 'side-item d2' + (activeFolder === item.id && activeSub === subName && activeLeaf === leaf ? ' active' : '');
@@ -7350,12 +7368,14 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
       docs:'{n} document(s)', news:'{n} nouveau(x)', back:'← Retour', subj:'Choisissez la matière', type:'Choisissez le type de document', resume:'Reprendre là où vous étiez',
       board:'Tableau blanc', live:'Séance live', boardS:'Écrire, dessiner, plusieurs pages', liveS:'Cours en direct et PDF', licence:'Licence', licenceS:'Mathématiques',
       bac:'Baccalauréat', bacS:'5 filières', divers:'Divers cours', diversS:'Analyse, algèbre, ODE…', homeStart:'Ouvrir l’accueil en grandes icônes au démarrage',
-      navMode:'Navigation', navBoth:'Icônes + menu', navIcons:'Icônes seules', tileSize:'Taille des icônes', s:'Petites', m:'Moyennes', xl:'Grandes', toHome:'🏠 Accueil' },
+      navMode:'Navigation', navBoth:'Icônes + menu', navIcons:'Icônes seules', tileSize:'Taille des icônes', s:'Petites', m:'Moyennes', xl:'Grandes', toHome:'🏠 Accueil',
+      exams:'Devoirs surveillés & Examens', examsSec:'Devoirs surveillés & Examens', examsS:'DS · Examens', examsFil:'Choisissez votre filière', nFil:'{n} filière(s)' },
     en:{ home:'Home', hello:'Hello {n} 👋', choose:'Choose your class', prepa:'Preparatory classes', y1:'1st year', y2:'2nd year', other:'Other spaces and tools', tools:'Tools',
       docs:'{n} document(s)', news:'{n} new', back:'← Back', subj:'Choose the subject', type:'Choose the document type', resume:'Pick up where you left off',
       board:'Whiteboard', live:'Live session', boardS:'Write, draw, several pages', liveS:'Live lessons and PDFs', licence:'Bachelor', licenceS:'Mathematics',
       bac:'Baccalaureate', bacS:'5 tracks', divers:'Other courses', diversS:'Analysis, algebra, ODE…', homeStart:'Open the big-icon home page at startup',
-      navMode:'Navigation', navBoth:'Icons + menu', navIcons:'Icons only', tileSize:'Icon size', s:'Small', m:'Medium', xl:'Large', toHome:'🏠 Home' }
+      navMode:'Navigation', navBoth:'Icons + menu', navIcons:'Icons only', tileSize:'Icon size', s:'Small', m:'Medium', xl:'Large', toHome:'🏠 Home',
+      exams:'Tests & Exams', examsSec:'Tests & Exams', examsS:'Tests · Exams', examsFil:'Choose your class', nFil:'{n} class(es)' }
   };
   const t = k => TX[L()][k];
 
@@ -7364,7 +7384,10 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     p_classe_pt:{ ic:'∫', c:['#1e40af', '#3b82f6'] }, p_classe_m:{ ic:'Σ', c:['#5b21b6', '#8b5cf6'] },
     d_classe_spst:{ ic:'∂', c:['#065f46', '#10b981'] }, d_classe_sm:{ ic:'∞', c:['#9a3412', '#f97316'] },
     licence:{ ic:'ℝ', c:['#9d174d', '#ec4899'] }, divers_main:{ ic:'∇', c:['#155e75', '#06b6d4'] }, bac_main:{ ic:'π', c:['#92400e', '#f59e0b'] },
-    board_tab:{ ic:'✍️', emo:1, c:['#1e293b', '#475569'] }, visio_tab:{ ic:'🎥', emo:1, c:['#991b1b', '#ef4444'] }
+    board_tab:{ ic:'✍️', emo:1, c:['#1e293b', '#475569'] }, visio_tab:{ ic:'🎥', emo:1, c:['#991b1b', '#ef4444'] },
+    exam_hub:{ ic:'📝', emo:1, c:['#7f1d1d', '#e11d48'] },
+    ds_pt:{ ic:'📂', emo:1, c:['#0369a1', '#38bdf8'] },   ds_m:{ ic:'📂', emo:1, c:['#a21caf', '#e879f9'] },
+    ds_spst:{ ic:'📂', emo:1, c:['#15803d', '#84cc16'] }, ds_sm:{ ic:'📂', emo:1, c:['#c2410c', '#facc15'] }
   };
   const SUBLOOK = {
     'ANALYSE':['∫', '#1d4ed8', '#60a5fa'], 'ALGÈBRE':['λ', '#6d28d9', '#a78bfa'], 'GÉOMÉTRIE':['△', '#047857', '#34d399'],
@@ -7376,7 +7399,8 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
   const LEAFLOOK = {
     'Cours':['📘', '#1d4ed8', '#60a5fa'], 'Séries corrigées':['✅', '#047857', '#34d399'], 'TD':['✏️', '#7c3aed', '#c4b5fd'], 'Devoirs corrigés':['📝', '#b45309', '#fbbf24'],
     'Résumé de cours':['📒', '#1d4ed8', '#60a5fa'], 'Exercices corrigés':['✅', '#047857', '#34d399'], 'Problème corrigé':['🧩', '#7c3aed', '#c4b5fd'], 'Ancien sujet corrigé':['🗂️', '#b45309', '#fbbf24'],
-    'Homework':['🏠', '#be185d', '#f9a8d4']
+    'Homework':['🏠', '#be185d', '#f9a8d4'],
+    'Devoir surveillé':['⏱️', '#b45309', '#fbbf24'], 'Examen':['🎓', '#be123c', '#fb7185']
   };
 
   /* ---------- Comptage des documents ---------- */
@@ -7394,10 +7418,10 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
   }
   const userGroup = () => (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.group || 'prepa') : 'prepa';
   const allowed = it => (!it.groups || it.groups.includes(userGroup()) || (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin')) && structItemVisible(it);
-  const leavesFor = fid => fid.includes('divers_main') ? DIVERS_CATEGORIES : fid.includes('bac_main') ? BAC_CATEGORIES : SUB_CATEGORIES;
+  const leavesFor = fid => leafCatsFor(fid);
 
   /* ---------- Vue d'accueil ---------- */
-  let level = { folder:null, sub:null };
+  let level = { folder:null, sub:null, hub:false };
   function tile({ ic, emo, c1, c2, title, sub, badge, onclick, id, tag }) {
     return `<button class="hm-tile" style="--c1:${c1};--c2:${c2}" data-hm="${esc(id)}">
       ${badge ? `<span class="hm-badge">${esc(badge)}</span>` : ''}
@@ -7413,7 +7437,15 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     const newB = n => n ? t('news').replace('{n}', n) : '';
     const crumbs = [`<a data-crumb="root">🏠 ${t('home')}</a>`];
 
-    if (!level.folder) {
+    if (level.hub && !level.folder) {
+      crumbs.push(`<span>›</span><b>${esc(t('exams'))}</b>`);
+      html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="root">${t('back')}</button><h3>📝 ${esc(t('exams'))} — ${t('examsFil')}</h3></div><div class="hm-grid">` +
+        STRUCTURE.filter(it => it.exam && allowed(it)).map(it => {
+          const lk = LOOK[it.id] || { ic:'📂', emo:1, c:['#334155', '#64748b'] };
+          actions[it.id] = () => { level = { folder:it, sub:null, hub:true }; renderHome(); window.scrollTo({ top:0 }); };
+          return tile({ ic:lk.ic, emo:lk.emo, c1:lk.c[0], c2:lk.c[1], title:tr(it.fil), sub:(it.sub || []).map(tr).join(' · ') + ' · ' + docs(C.f[it.id]), badge:newB(C.nf[it.id]), id:it.id, tag:t('examsS') });
+        }).join('') + `</div>`;
+    } else if (!level.folder) {
       const name = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? String(currentUser.name).split(' ')[0] : '';
       html += `<div class="hm-head"><h3>${esc(name ? t('hello').replace('{n}', name) : t('home'))}</h3></div>`;
       // Reprendre
@@ -7427,8 +7459,11 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
       const sections = [];
       let curSec = null;
       const otherSec = () => { let o = sections.find(x => x.other); if (!o) { o = { title:t('other'), items:[], other:true }; sections.push(o); } return o; };
+      const examF = STRUCTURE.filter(it => it.exam && allowed(it));
       STRUCTURE.forEach(it => {
         if (!allowed(it)) return;
+        if (it.exam) return;
+        if (it.type === 'title' && !it.id && /EXAMENS/.test(it.txt)) return;
         if (it.type === 'year') {
           let pre = sections.find(x => x.prepa); if (!pre) { pre = { title:t('prepa'), items:[], prepa:true }; sections.push(pre); }
           pre.year = /DEUX|SECOND/i.test(it.txt) ? t('y2') : t('y1'); curSec = pre; return;
@@ -7447,11 +7482,18 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
           curSec.items.push({ id:it.id, title, sub, badge:newB(C.nf[it.id]), folder:it, tag:curSec.prepa ? curSec.year : '' });
         }
       });
+      if (examF.length) {
+        const nb = examF.reduce((a, f) => a + (C.f[f.id] || 0), 0), nn = examF.reduce((a, f) => a + (C.nf[f.id] || 0), 0);
+        const exSec = { title:'📝 ' + t('examsSec'), items:[{ id:'exam_hub', title:t('exams'), sub:t('examsS') + ' · ' + t('nFil').replace('{n}', examF.length) + ' · ' + docs(nb), badge:newB(nn), hub:true }] };
+        const ip = sections.findIndex(x => x.prepa);
+        sections.splice(ip >= 0 ? ip + 1 : 0, 0, exSec);
+      }
       sections.forEach(sec => {
         if (!sec.items.length) return;
         html += `<div class="hm-sec">${esc(sec.title)}</div><div class="hm-grid">` + sec.items.map(it => {
           const lk = LOOK[it.id] || { ic:'📁', emo:1, c:['#334155', '#64748b'] };
-          actions[it.id] = it.special ? () => { try { handleSpecialTab(it.special.id, tr(it.special.txt)); } catch (e) {} }
+          actions[it.id] = it.hub ? () => { level = { folder:null, sub:null, hub:true }; renderHome(); window.scrollTo({ top:0 }); }
+            : it.special ? () => { try { handleSpecialTab(it.special.id, tr(it.special.txt)); } catch (e) {} }
             : it.id === 'licence' ? () => { try { selectCategory('licence', '', ''); } catch (e) {} }
             : () => { level = { folder:it.folder, sub:null }; renderHome(); window.scrollTo({ top:0 }); };
           return tile({ ic:lk.ic, emo:lk.emo, c1:lk.c[0], c2:lk.c[1], title:it.title, sub:it.sub, badge:it.badge, id:it.id, tag:it.tag });
@@ -7459,8 +7501,9 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
       });
     } else if (!level.sub) {
       const f = level.folder, lk = LOOK[f.id] || { c:['#334155', '#64748b'] };
-      crumbs.push(`<span>›</span><b>${esc(tr(f.txt))}</b>`);
-      html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="root">${t('back')}</button><h3>${esc(tr(f.txt))} — ${t('subj')}</h3></div><div class="hm-grid">` +
+      if (f.exam) crumbs.push(`<span>›</span><a data-crumb="hub">${esc(t('exams'))}</a>`);
+      crumbs.push(`<span>›</span><b>${esc(tr(f.exam ? f.fil : f.txt))}</b>`);
+      html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="${f.exam ? 'hub' : 'root'}">${t('back')}</button><h3>${esc(tr(f.txt))} — ${t('subj')}</h3></div><div class="hm-grid">` +
         (f.sub || []).map((s, i) => {
           const sl = SUBLOOK[s] || ['📁', lk.c[0], lk.c[1], 1], key = f.id + '|' + s;
           actions['s' + i] = () => {
@@ -7471,7 +7514,8 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
         }).join('') + `</div>`;
     } else {
       const f = level.folder, s = level.sub;
-      crumbs.push(`<span>›</span><a data-crumb="folder">${esc(tr(f.txt))}</a><span>›</span><b>${esc(tr(s))}</b>`);
+      if (f.exam) crumbs.push(`<span>›</span><a data-crumb="hub">${esc(t('exams'))}</a>`);
+      crumbs.push(`<span>›</span><a data-crumb="folder">${esc(tr(f.exam ? f.fil : f.txt))}</a><span>›</span><b>${esc(tr(s))}</b>`);
       html += `<div class="hm-crumbs">${crumbs.join(' ')}</div><div class="hm-head"><button class="hm-back" data-crumb="folder">${t('back')}</button><h3>${esc(tr(s))} — ${t('type')}</h3></div><div class="hm-grid">` +
         leavesFor(f.id).map((lf, i) => {
           const ll = LEAFLOOK[lf] || ['📄', '#334155', '#64748b'], key = f.id + '|' + s + '|' + lf;
@@ -7484,7 +7528,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
   document.addEventListener('click', e => {
     const hv = $('homeView'); if (!hv || !hv.contains(e.target)) return;
     const c = e.target.closest('[data-crumb]');
-    if (c) { level = c.dataset.crumb === 'root' ? { folder:null, sub:null } : { folder:level.folder, sub:null }; renderHome(); return; }
+    if (c) { level = c.dataset.crumb === 'root' ? { folder:null, sub:null, hub:false } : c.dataset.crumb === 'hub' ? { folder:null, sub:null, hub:true } : { folder:level.folder, sub:null, hub:level.hub }; renderHome(); return; }
     const b = e.target.closest('[data-hm]'); if (b && actions[b.dataset.hm]) actions[b.dataset.hm]();
   });
 
@@ -7520,6 +7564,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     let f = null, s = '', lf = '';
     try { f = (STRUCTURE || []).find(x => x.id === activeFolder); s = activeSub; lf = activeLeaf; } catch (e) {}
     const parts = [`<button class="hm-back" data-cb="root">${t('toHome')}</button>`];
+    if (f && f.exam) parts.push(`<span>›</span><a data-cb="hub"><span style="color:var(--bleu2);cursor:pointer;font-weight:700">📝 ${esc(t('exams'))}</span></a>`);
     if (f) parts.push(`<span>›</span><a class="hm-crumbs" style="margin:0" data-cb="folder"><span style="color:var(--bleu2);cursor:pointer;font-weight:700">${esc(tr(f.txt))}</span></a>`);
     if (f && s && !String(f.id).includes('saudi')) parts.push(`<span>›</span><a data-cb="sub"><span style="color:var(--bleu2);cursor:pointer;font-weight:700">${esc(tr(s))}</span></a>`);
     if (lf && lf !== s) parts.push(`<span>›</span><b>${esc(tr(lf))}</b>`);
@@ -7533,7 +7578,8 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
       const b = e.target.closest('[data-cb]'); if (!b) return;
       let f = null; try { f = (STRUCTURE || []).find(x => x.id === activeFolder); } catch (er) {}
       if (b.dataset.cb === 'root') showHome({ folder:null, sub:null });
-      else if (b.dataset.cb === 'folder' && f) showHome({ folder:f, sub:null });
+      else if (b.dataset.cb === 'hub') showHome({ folder:null, sub:null, hub:true });
+      else if (b.dataset.cb === 'folder' && f) showHome({ folder:f, sub:null, hub:!!f.exam });
       else if (b.dataset.cb === 'sub' && f) showHome({ folder:f, sub:activeSub });
     });
   }
