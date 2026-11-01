@@ -473,6 +473,7 @@
     if (th === 'auto') th = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', th);
     document.documentElement.setAttribute('data-accent', p.accent || 'bleu');
+    document.documentElement.setAttribute('data-pal', p.palette || 'classique');
   } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
 })();
 </script>
@@ -502,6 +503,39 @@ html[data-theme="dark"][data-accent="violet"]  { --bleu2:#8b5cf6; }
 html[data-theme="dark"][data-accent="emeraude"]{ --bleu2:#10a37f; }
 html[data-theme="dark"][data-accent="orange"]  { --bleu2:#ea6a1f; }
 html[data-theme="dark"][data-accent="rose"]    { --bleu2:#e0367f; }
+/* ---------- Modes de couleur (ambiances) ---------- */
+html[data-pal="sepia"] { --fond:#f4ecdc; --carte:#fffaf0; --texte:#3a2c1a; --gris:#7a6650; --bord:#e6d8bd; --surf2:#faf3e4; --nav:#5a3c1e; --nav2:#46301a; --titre:#5a3c1e; --grid:rgba(90,60,30,.05); }
+html[data-theme="dark"][data-pal="sepia"] { --fond:#17120c; --carte:#221a12; --texte:#efe3cf; --gris:#b5a184; --bord:#3a2d1e; --surf2:#2a2017; --nav:#2b1f12; --nav2:#20170d; --titre:#f3dcb5; --grid:rgba(240,210,160,.05); }
+html[data-pal="ocean"] { --fond:#e8f4f7; --carte:#ffffff; --texte:#0d2b36; --gris:#4f6f7a; --bord:#cfe4ea; --surf2:#f2f9fb; --nav:#0b4a5e; --nav2:#083947; --titre:#0b4a5e; --grid:rgba(11,74,94,.05); }
+html[data-theme="dark"][data-pal="ocean"] { --fond:#06161c; --carte:#0c222b; --texte:#dff3f8; --gris:#8fb1bc; --bord:#18404d; --surf2:#102c37; --nav:#082a35; --nav2:#051e27; --titre:#b9eaf5; --grid:rgba(150,220,240,.05); }
+html[data-pal="foret"] { --fond:#ecf3ec; --carte:#ffffff; --texte:#132a1c; --gris:#56705e; --bord:#d4e3d6; --surf2:#f4f9f4; --nav:#1d4a2f; --nav2:#153a24; --titre:#1d4a2f; --grid:rgba(29,74,47,.05); }
+html[data-theme="dark"][data-pal="foret"] { --fond:#0a140e; --carte:#112018; --texte:#e2f0e6; --gris:#93ad9b; --bord:#1f3a2a; --surf2:#16291e; --nav:#0f2618; --nav2:#0a1c11; --titre:#c4ecd0; --grid:rgba(160,230,180,.05); }
+html[data-pal="lavande"] { --fond:#f2eefa; --carte:#ffffff; --texte:#24173e; --gris:#6b5f86; --bord:#e1d9f1; --surf2:#f8f5fd; --nav:#3b2470; --nav2:#2e1b5a; --titre:#3b2470; --grid:rgba(59,36,112,.05); }
+html[data-theme="dark"][data-pal="lavande"] { --fond:#110c1e; --carte:#1a142c; --texte:#ece6fa; --gris:#a79cc4; --bord:#2f2550; --surf2:#221a38; --nav:#1d1438; --nav2:#150e2a; --titre:#ddd0ff; --grid:rgba(200,180,255,.05); }
+html[data-pal="corail"] { --fond:#fbefec; --carte:#ffffff; --texte:#3a1a1a; --gris:#84605c; --bord:#f0d8d2; --surf2:#fdf6f4; --nav:#7a2233; --nav2:#631a29; --titre:#7a2233; --grid:rgba(122,34,51,.05); }
+html[data-theme="dark"][data-pal="corail"] { --fond:#1a0d0f; --carte:#251417; --texte:#f8e5e3; --gris:#c19c98; --bord:#45232a; --surf2:#2e191d; --nav:#2a1218; --nav2:#1f0c11; --titre:#ffd2cc; --grid:rgba(255,190,180,.05); }
+html[data-pal="graphite"] { --fond:#eef0f3; --carte:#ffffff; --texte:#1b1f27; --gris:#5f6775; --bord:#dde1e7; --surf2:#f6f7f9; --nav:#262b35; --nav2:#1c2029; --titre:#262b35; --grid:rgba(38,43,53,.05); }
+html[data-theme="dark"][data-pal="graphite"] { --fond:#0e1013; --carte:#171a1f; --texte:#e6e8ec; --gris:#9aa1ad; --bord:#2a2f37; --surf2:#1e2228; --nav:#15181d; --nav2:#0f1115; --titre:#f1f3f6; --grid:rgba(200,205,215,.05); }
+html[data-pal="mono"] { --fond:#ffffff; --carte:#ffffff; --texte:#000000; --gris:#444444; --bord:#cfcfcf; --surf2:#f4f4f4; --nav:#000000; --nav2:#000000; --titre:#000000; --grid:rgba(0,0,0,.05); }
+html[data-theme="dark"][data-pal="mono"] { --fond:#000000; --carte:#0b0b0b; --texte:#ffffff; --gris:#b5b5b5; --bord:#2c2c2c; --surf2:#141414; --nav:#000000; --nav2:#000000; --titre:#ffffff; --grid:rgba(255,255,255,.05); }
+html[data-accent="turquoise"]{ --bleu2:#0e7490; --cyan:#22d3ee; }
+html[data-accent="indigo"]   { --bleu2:#4338ca; --cyan:#818cf8; }
+html[data-accent="rouge"]    { --bleu2:#b91c1c; --cyan:#f97316; }
+html[data-theme="dark"][data-accent="turquoise"]{ --bleu2:#0e9aae; }
+html[data-theme="dark"][data-accent="indigo"]   { --bleu2:#6366f1; }
+html[data-theme="dark"][data-accent="rouge"]    { --bleu2:#e03b3b; }
+html.pal-anim, html.pal-anim * { transition:background-color .35s, border-color .35s, color .35s !important; }
+.cc-pals { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:10px; margin-top:8px; width:100%; }
+.cc-pal { border:2px solid var(--bord); border-radius:12px; padding:0; background:var(--carte); color:var(--texte); cursor:pointer; overflow:hidden; text-align:left; font-size:12.5px; font-weight:700; transition:transform .12s, border-color .12s; }
+.cc-pal:hover { transform:translateY(-2px); }
+.cc-pal.on { border-color:var(--bleu2); box-shadow:0 0 0 3px color-mix(in srgb, var(--bleu2) 25%, transparent); }
+.cc-pal .pv { display:flex; height:46px; }
+.cc-pal .pv i { width:16px; display:block; }
+.cc-pal .pv div { flex:1; padding:6px; display:flex; flex-direction:column; gap:4px; }
+.cc-pal .pv b { display:block; height:7px; border-radius:4px; }
+.cc-pal .pv s { display:block; height:13px; border-radius:4px; text-decoration:none; }
+.cc-pal span { display:block; padding:6px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cc-sec-row { display:block !important; }
 
 * { font-family:'Manrope', 'Segoe UI', Tahoma, sans-serif; }
 body { background:var(--fond); color:var(--texte); -webkit-font-smoothing:antialiased; }
@@ -3946,7 +3980,9 @@ console.log('✅ Zoom widget chargé avec succès !');
   const TX = {
     fr: {
       settings:'Paramètres', appearance:'Apparence', theme:'Thème', light:'Clair', dark:'Sombre', auto:'Auto',
-      accent:"Couleur d'accent", textSize:'Taille du texte', density:'Densité', comfort:'Confortable', compact:'Compacte',
+      accent:"Couleur d'accent", palette:'Mode de couleur', paletteS:'Ambiance générale du site (fonds, barres, bandeau)', aPalette:'Mode de couleur suivant', kPalette:'Mode de couleur suivant', paletteNow:'Mode de couleur', palRandom:'🎲 Surprise',
+      pal_classique:'Classique', pal_sepia:'Sépia', pal_ocean:'Océan', pal_foret:'Forêt', pal_lavande:'Lavande', pal_corail:'Corail', pal_graphite:'Graphite', pal_mono:'Noir & blanc',
+      textSize:'Taille du texte', density:'Densité', comfort:'Confortable', compact:'Compacte',
       docsView:'Vue des documents', list:'Liste', grid:'Grille', display:'Affichage',
       showStats:'Panneau statistiques', showStatsS:'Colonne de droite',
       showBanner:'Bannière et formule', motion:'Animations', motionS:'Désactiver pour un affichage plus calme',
@@ -3975,7 +4011,9 @@ console.log('✅ Zoom widget chargé avec succès !');
     },
     en: {
       settings:'Settings', appearance:'Appearance', theme:'Theme', light:'Light', dark:'Dark', auto:'Auto',
-      accent:'Accent color', textSize:'Text size', density:'Density', comfort:'Comfortable', compact:'Compact',
+      accent:'Accent color', palette:'Color mode', paletteS:'Overall look of the site (backgrounds, bars, banner)', aPalette:'Next color mode', kPalette:'Next color mode', paletteNow:'Color mode', palRandom:'🎲 Surprise',
+      pal_classique:'Classic', pal_sepia:'Sepia', pal_ocean:'Ocean', pal_foret:'Forest', pal_lavande:'Lavender', pal_corail:'Coral', pal_graphite:'Graphite', pal_mono:'Black & white',
+      textSize:'Text size', density:'Density', comfort:'Comfortable', compact:'Compact',
       docsView:'Documents view', list:'List', grid:'Grid', display:'Display',
       showStats:'Statistics panel', showStatsS:'Right-hand column',
       showBanner:'Banner and formula', motion:'Animations', motionS:'Turn off for a calmer display',
@@ -4006,10 +4044,11 @@ console.log('✅ Zoom widget chargé avec succès !');
   const t = k => (TX[L()][k] != null ? TX[L()][k] : (TX.fr[k] || k));
 
   /* ---------------- Préférences ---------------- */
-  const DEF = { theme:'auto', accent:'bleu', density:'comfort', view:'list', stats:true, banner:true, motion:true,
+  const DEF = { theme:'auto', palette:'classique', accent:'bleu', density:'comfort', view:'list', stats:true, banner:true, motion:true,
                 zoomWidget:true, progress:true, reading:false, timer:false, boardBg:'plain' };
   let P = Object.assign({}, DEF, LS.get('tpm_prefs', {}));
-  const ACCENTS = { bleu:'#1d4ed8', violet:'#6d28d9', emeraude:'#047857', orange:'#c2410c', rose:'#be185d' };
+  const ACCENTS = { bleu:'#1d4ed8', violet:'#6d28d9', emeraude:'#047857', orange:'#c2410c', rose:'#be185d', turquoise:'#0e7490', indigo:'#4338ca', rouge:'#b91c1c' };
+  const PALS = { classique:{ acc:'bleu', L:['#0f2a5c','#eef2f8','#ffffff'], D:['#0b1730','#0a1222','#111b31'] }, sepia:{ acc:'orange', L:['#5a3c1e','#f4ecdc','#fffaf0'], D:['#2b1f12','#17120c','#221a12'] }, ocean:{ acc:'turquoise', L:['#0b4a5e','#e8f4f7','#ffffff'], D:['#082a35','#06161c','#0c222b'] }, foret:{ acc:'emeraude', L:['#1d4a2f','#ecf3ec','#ffffff'], D:['#0f2618','#0a140e','#112018'] }, lavande:{ acc:'violet', L:['#3b2470','#f2eefa','#ffffff'], D:['#1d1438','#110c1e','#1a142c'] }, corail:{ acc:'rose', L:['#7a2233','#fbefec','#ffffff'], D:['#2a1218','#1a0d0f','#251417'] }, graphite:{ acc:'indigo', L:['#262b35','#eef0f3','#ffffff'], D:['#15181d','#0e1013','#171a1f'] }, mono:{ acc:'rouge', L:['#000000','#ffffff','#ffffff'], D:['#000000','#000000','#0b0b0b'] } };
   const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   const resolvedTheme = () => P.theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : P.theme;
 
@@ -4019,8 +4058,10 @@ console.log('✅ Zoom widget chargé avec succès !');
     const th = resolvedTheme();
     h.setAttribute('data-theme', th);
     h.setAttribute('data-accent', P.accent);
+    if (!PALS[P.palette]) P.palette = 'classique';
+    h.setAttribute('data-pal', P.palette);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', th === 'dark' ? '#0b1730' : '#0f2a5c');
+    if (meta) meta.setAttribute('content', PALS[P.palette][th === 'dark' ? 'D' : 'L'][0]);
     b.classList.toggle('compact', P.density === 'compact');
     b.classList.toggle('grid-view', P.view === 'grid');
     b.classList.toggle('hide-stats', !P.stats);
@@ -4038,7 +4079,20 @@ console.log('✅ Zoom widget chargé avec succès !');
     const ab = $('ccAuthTheme'); if (ab) ab.textContent = th === 'dark' ? '☀️' : '🌙';
     if (typeof window.ccApplyExtra === 'function') { try { window.ccApplyExtra(P); } catch (e) {} }
   }
-  function setPref(k, v) { P[k] = v; savePrefs(); applyPrefs(); renderSettings(); }
+  function setPref(k, v) {
+    if (k === 'palette') {
+      if (v === 'random') { const ks = Object.keys(PALS).filter(x => x !== P.palette); v = ks[Math.floor(Math.random() * ks.length)]; }
+      if (!PALS[v]) return;
+      P.accent = PALS[v].acc;
+      const h = document.documentElement; h.classList.add('pal-anim'); clearTimeout(setPref._t); setPref._t = setTimeout(() => h.classList.remove('pal-anim'), 450);
+    }
+    P[k] = v; savePrefs(); applyPrefs(); renderSettings();
+  }
+  function cyclePalette() {
+    const ks = Object.keys(PALS), n = ks[(ks.indexOf(P.palette) + 1) % ks.length];
+    setPref('palette', n);
+    try { toast(t('paletteNow') + ' : ' + t('pal_' + n)); } catch (e) {}
+  }
   if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (P.theme === 'auto') applyPrefs(); });
   function toggleTheme() { setPref('theme', resolvedTheme() === 'dark' ? 'light' : 'dark'); }
 
@@ -4068,7 +4122,14 @@ console.log('✅ Zoom widget chargé avec succès !');
     $('ccSettings').innerHTML = head('⚙️ ' + t('settings')) + `<div class="cc-dbody">
       <div class="cc-sec"><h4>${t('appearance')}</h4>
         <div class="cc-row"><span>${t('theme')}</span>${seg('theme', [['light', '☀️ ' + t('light')], ['dark', '🌙 ' + t('dark')], ['auto', t('auto')]])}</div>
-        <div class="cc-row"><span>${t('accent')}</span><div class="cc-dots">${Object.keys(ACCENTS).map(a =>
+        <div class="cc-row cc-sec-row"><span>${t('palette')}<small>${t('paletteS')}</small></span><div class="cc-pals">${Object.keys(PALS).map(k => {
+          const c = PALS[k][resolvedTheme() === 'dark' ? 'D' : 'L'], a = ACCENTS[PALS[k].acc];
+          return `<button class="cc-pal ${P.palette === k ? 'on' : ''}" data-pref="palette" data-val="${k}" title="${t('pal_' + k)}" aria-label="${t('pal_' + k)}">
+            <div class="pv" style="background:${c[1]}"><i style="background:${c[0]}"></i><div><b style="background:${c[0]}"></b><s style="background:${c[2]}; border:1px solid rgba(127,127,127,.25)"></s><b style="background:${a}; width:55%"></b></div></div>
+            <span>${t('pal_' + k)}</span></button>`; }).join('')}
+          <button class="cc-pal" data-pref="palette" data-val="random"><div class="pv" style="background:conic-gradient(#5a3c1e,#0b4a5e,#1d4a2f,#3b2470,#7a2233,#0f2a5c,#5a3c1e); align-items:center; justify-content:center; font-size:22px">🎲</div><span>${t('palRandom').replace('🎲 ', '')}</span></button>
+        </div></div>
+        <div class="cc-row"><span>${t('accent')}</span><div class="cc-dots" style="flex-wrap:wrap; justify-content:flex-end">${Object.keys(ACCENTS).map(a =>
           `<button class="cc-dot ${P.accent === a ? 'on' : ''}" data-pref="accent" data-val="${a}" style="background:${ACCENTS[a]}" aria-label="${a}" title="${a}"></button>`).join('')}</div></div>
         <div class="cc-row" style="flex-wrap:wrap"><span>${t('textSize')}</span>
           <div class="cc-range"><span>A</span><input type="range" id="ccZoom" min="70" max="200" step="10" value="${z}"><span style="font-size:18px">A</span><b id="ccZoomV">${z}%</b></div></div>
@@ -4383,6 +4444,7 @@ console.log('✅ Zoom widget chargé avec succès !');
   let palItems = [], palSel = 0;
   const ACTIONS = () => [
     { ic:'🌓', l:t('aTheme'), k:'Alt T', run:toggleTheme },
+    { ic:'🎨', l:t('aPalette'), k:'Alt C', run:cyclePalette },
     { ic:'✍️', l:t('aBoard'), run:() => { try { handleSpecialTab('board_tab', trNav('✍️ TABLEAU BLANC')); } catch (e) {} } },
     { ic:'🎥', l:t('aVisio'), run:() => { try { handleSpecialTab('visio_tab', trNav('🎥 SÉANCE LIVE')); } catch (e) {} } },
     { ic:'⭐', l:t('aFav'), run:() => openLib('fav') },
@@ -4440,7 +4502,7 @@ console.log('✅ Zoom widget chargé avec succès !');
 
   /* ---------------- Aide raccourcis ---------------- */
   function openHelp() {
-    const rows = [['kPal', 'Ctrl K'], ['kSearch', '/'], ['kTheme', 'Alt T'], ['kRead', 'Alt R'], ['kZoom', 'Ctrl + / Ctrl −'],
+    const rows = [['kPal', 'Ctrl K'], ['kSearch', '/'], ['kTheme', 'Alt T'], ['kPalette', 'Alt C'], ['kRead', 'Alt R'], ['kZoom', 'Ctrl + / Ctrl −'],
                   ['kZoom0', 'Ctrl 0'], ['kUndo', 'Ctrl Z'], ['kRedo', 'Ctrl Y'], ['kEsc', 'Échap'], ['kHelp', '?']];
     const extra = typeof window.ccExtraHelp === 'function' ? window.ccExtraHelp() : [];
     $('ccHelp').innerHTML = head('⌨️ ' + t('shortcuts')) + `<div class="cc-dbody"><table>${rows.concat(extra).map(([k, s]) =>
@@ -4460,6 +4522,7 @@ console.log('✅ Zoom widget chargé avec succès !');
       return;
     }
     if (e.altKey && e.code === 'KeyT') { e.preventDefault(); toggleTheme(); return; }
+    if (e.altKey && e.code === 'KeyC' && !mod) { e.preventDefault(); cyclePalette(); return; }
     if (!appVisible()) return;
     if (e.altKey && e.code === 'KeyR') { e.preventDefault(); setPref('reading', !P.reading); return; }
     const onBoard = typeof currentView !== 'undefined' && currentView === 'board';
