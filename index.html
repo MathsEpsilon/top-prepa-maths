@@ -7418,6 +7418,38 @@ body.tiles-xl .hm-tt b { font-size:23px; }
 .hm-badge { position:absolute; top:14px; right:14px; z-index:2; background:#fff; color:#dc2626; font-weight:800; font-size:12px; border-radius:999px; padding:4px 10px; box-shadow:0 4px 12px rgba(0,0,0,.2); }
 .hm-lock { position:absolute; top:14px; right:14px; z-index:2; font-size:18px; }
 .hm-news { display:flex; flex-direction:column; gap:10px; }
+
+/* ---------- Actualité compacte : une icône par section ---------- */
+.hm-sec.nw-title { display:flex; align-items:center; gap:9px; color:#16a34a; }
+.nw-led { width:11px; height:11px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 0 rgba(34,197,94,.7); animation:nwPulse 1.4s infinite; }
+.nw-blink { animation:nwBlink 1.2s ease-in-out infinite; }
+@keyframes nwPulse { 0% { box-shadow:0 0 0 0 rgba(34,197,94,.75); } 70% { box-shadow:0 0 0 10px rgba(34,197,94,0); } 100% { box-shadow:0 0 0 0 rgba(34,197,94,0); } }
+@keyframes nwBlink { 0%, 100% { opacity:1; } 50% { opacity:.35; } }
+.nw-bar { display:flex; flex-wrap:wrap; gap:14px; }
+.nw-chip { position:relative; display:flex; flex-direction:column; align-items:center; gap:7px; width:104px; padding:12px 6px 10px; border:2px solid transparent; border-radius:18px;
+  background:var(--carte); color:var(--texte); cursor:pointer; box-shadow:var(--ombre); transition:transform .15s, border-color .15s; }
+.nw-chip:hover { transform:translateY(-3px); }
+.nw-chip.on { border-color:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.22), var(--ombre); }
+.nw-chip .ci { width:58px; height:58px; border-radius:17px; display:grid; place-items:center; color:#fff; font-family:'Spectral', Georgia, serif; font-size:32px; font-weight:700;
+  background:linear-gradient(140deg, var(--c1), var(--c2)); }
+.nw-chip .ci.emo { font-family:'Segoe UI Emoji', 'Apple Color Emoji', sans-serif; font-size:28px; }
+.nw-chip b { font-size:13px; font-weight:800; text-align:center; line-height:1.15; }
+.nw-chip .cnt { position:absolute; top:-7px; right:-7px; min-width:26px; height:26px; padding:0 7px; border-radius:999px; background:#16a34a; color:#fff; font-size:12.5px; font-weight:800;
+  display:grid; place-items:center; border:2.5px solid var(--carte); animation:nwPulse 1.4s infinite, nwBlink 1.2s ease-in-out infinite; }
+.nw-panel { margin-top:12px; border:2px solid #22c55e; border-radius:16px; background:var(--carte); box-shadow:var(--ombre); overflow:hidden; animation:nwOpen .2s ease-out; }
+@keyframes nwOpen { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.nw-ph { display:flex; align-items:center; gap:10px; padding:10px 14px; color:#fff; background:linear-gradient(120deg, var(--c1), var(--c2)); font-weight:800; font-size:14.5px; }
+.nw-ph .x { margin-left:auto; border:none; background:rgba(255,255,255,.22); color:#fff; border-radius:8px; width:30px; height:30px; cursor:pointer; font-size:14px; }
+.nw-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:none; border-top:1px solid var(--bord); background:transparent; color:var(--texte); padding:10px 14px; cursor:pointer; }
+.nw-row:first-of-type { border-top:none; }
+.nw-row:hover { background:var(--surf2); }
+.nw-row .ri { font-size:21px; flex:none; }
+.nw-row .rt { flex:1; min-width:0; } .nw-row .rt b { display:block; font-size:14px; }
+.nw-row .rt small { display:block; font-size:12px; color:var(--gris); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nw-row .rm { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:3px; font-size:11.5px; color:var(--gris); }
+.nw-row em { font-style:normal; font-size:10.5px; font-weight:800; background:#16a34a; color:#fff; border-radius:6px; padding:2px 7px; }
+body.no-motion .nw-led, body.no-motion .nw-blink, body.no-motion .nw-chip .cnt { animation:none; }
+@media (max-width:860px) { .nw-bar { gap:10px; } .nw-chip { width:86px; } .nw-chip .ci { width:46px; height:46px; font-size:25px; border-radius:14px; } }
 .hm-nw { display:flex; align-items:center; gap:14px; width:100%; text-align:left; cursor:pointer; border:none; border-radius:16px; padding:12px 16px; color:#fff;
   background:linear-gradient(120deg,var(--c1),var(--c2)); box-shadow:0 12px 26px -16px var(--c1); transition:transform .15s; }
 .hm-nw:hover { transform:translateX(4px); }
@@ -7512,6 +7544,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
 
   /* ---------- Vue d'accueil ---------- */
   let level = { folder:null, sub:null, hub:false };
+  let newsOpen = null;   // section d'actualité ouverte
   function tile({ ic, emo, c1, c2, title, sub, badge, onclick, id, tag }) {
     return `<button class="hm-tile" style="--c1:${c1};--c2:${c2}" data-hm="${esc(id)}">
       ${badge ? `<span class="hm-badge">${esc(badge)}</span>` : ''}
@@ -7553,22 +7586,45 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
           (groups[k] = groups[k] || { loc, files:[] }).files.push(f);
         });
         const list = Object.values(groups).map(g => { g.files.sort((x, y) => (y.ts || 0) - (x.ts || 0)); g.ts = g.files[0].ts || 0; return g; })
-          .sort((x, y) => y.ts - x.ts).slice(0, 6);
-        if (list.length) {
-          html += `<div class="hm-sec">📰 ${L() === 'en' ? 'News' : 'Actualité'}</div><div class="hm-news">` + list.map((g, i) => {
-            const { folder, sub, leaf } = g.loc, lk = LOOK[folder] || { c:['#334155', '#64748b'] };
-            const who = AUD[folder] ? (L() === 'en' ? `${AUD[folder]} students` : `Étudiants ${AUD[folder]}`)
-              : folder === 'bac_main' ? (L() === 'en' ? 'Bac students' : 'Élèves du Bac') : (L() === 'en' ? 'All students' : 'Tous les étudiants');
-            const what = [MAT[sub] || tr(sub), tr(leaf)].filter(Boolean).join(' › ');
-            const n = g.files.length, fresh = g.files.some(f => { try { return isNewFile(f); } catch (e) { return false; } });
-            actions['news' + i] = () => { try { if (folder === 'licence') selectCategory('licence', '', ''); else selectCategory(folder, sub, leaf); } catch (e) {} };
-            const more = n > 1 ? (L() === 'en' ? ` · +${n - 1} more` : ` · +${n - 1} autre${n > 2 ? 's' : ''}`) : '';
-            return `<button class="hm-nw" data-hm="news${i}" style="--c1:${lk.c[0]};--c2:${lk.c[1]}">
-              <span class="nw-ic">${LEAFIC[leaf] || '📕'}</span>
-              <span class="nw-tx"><b>${esc(who)} : ${L() === 'en' ? 'see' : 'voir'} ${esc(what)}</b>
-                <small>${n} ${L() === 'en' ? (n > 1 ? 'new documents' : 'new document') : (n > 1 ? 'nouveaux documents' : 'nouveau document')} — ${esc(g.files[0].name.replace(/\.pdf$/i, ''))}${more}</small></span>
-              <span class="nw-meta">${fresh ? `<em>${L() === 'en' ? 'NEW' : 'NOUVEAU'}</em>` : ''}<small>${esc(ago(g.ts))}</small></span></button>`;
-          }).join('') + `</div>`;
+          .sort((x, y) => y.ts - x.ts);
+        // regroupement par section (filière) : une icône par section
+        const SEC = {};
+        const CLASSOF = { 'P-T':'p_classe_pt', 'M':'p_classe_m', 'SP-ST':'d_classe_spst', 'SM':'d_classe_sm' };
+        list.forEach(g => {
+          const f = g.loc.folder, key = AUD[f] || f;
+          (SEC[key] = SEC[key] || { key, folder:f, groups:[], n:0, ts:0 }).groups.push(g);
+          SEC[key].n += g.files.length; SEC[key].ts = Math.max(SEC[key].ts, g.ts);
+        });
+        const secs = Object.values(SEC).sort((a, b) => b.ts - a.ts);
+        if (newsOpen && !SEC[newsOpen]) newsOpen = null;
+        if (secs.length) {
+          const secLabel = sc => AUD[sc.folder] ? sc.key : sc.folder === 'bac_main' ? 'Bac' : sc.folder === 'licence' ? 'Licence'
+            : sc.folder === 'divers_main' ? (L() === 'en' ? 'Misc.' : 'Divers') : (() => { const it = STRUCTURE.find(x => x.id === sc.folder); return it ? tr(it.txt) : sc.folder; })();
+          const secLook = sc => LOOK[CLASSOF[sc.key]] || LOOK[sc.folder] || { ic:'📰', emo:1, c:['#334155', '#64748b'] };
+          html += `<div class="hm-sec nw-title"><span class="nw-led"></span><span class="nw-blink">📰 ${L() === 'en' ? 'News' : 'Actualité'}</span></div><div class="nw-bar">` +
+            secs.map(sc => {
+              const lk = secLook(sc);
+              actions['nwsec_' + sc.key] = () => { newsOpen = newsOpen === sc.key ? null : sc.key; renderHome(); };
+              return `<button class="nw-chip ${newsOpen === sc.key ? 'on' : ''}" data-hm="nwsec_${esc(sc.key)}" style="--c1:${lk.c[0]};--c2:${lk.c[1]}" title="${esc(secLabel(sc))}">
+                <span class="ci ${lk.emo ? 'emo' : ''}">${lk.ic}</span><b>${esc(secLabel(sc))}</b><span class="cnt">${sc.n}</span></button>`;
+            }).join('') + `</div>`;
+          const sc = newsOpen && SEC[newsOpen];
+          if (sc) {
+            const lk = secLook(sc);
+            actions.nwclose = () => { newsOpen = null; renderHome(); };
+            html += `<div class="nw-panel" style="--c1:${lk.c[0]};--c2:${lk.c[1]}"><div class="nw-ph"><span class="nw-led"></span>${esc(L() === 'en' ? `${secLabel(sc)} students` : `Étudiants ${secLabel(sc)}`)} — ${sc.n} ${L() === 'en' ? (sc.n > 1 ? 'new documents' : 'new document') : (sc.n > 1 ? 'nouveaux documents' : 'nouveau document')}<button class="x" data-hm="nwclose" aria-label="close">✕</button></div>` +
+              sc.groups.map((g, i) => {
+                const { folder, sub, leaf } = g.loc;
+                const what = [MAT[sub] || tr(sub), tr(leaf)].filter(Boolean).join(' › ');
+                const n = g.files.length, fresh = g.files.some(f => { try { return isNewFile(f); } catch (e) { return false; } });
+                const id = 'news_' + sc.key + '_' + i;
+                actions[id] = () => { try { if (folder === 'licence') selectCategory('licence', '', ''); else selectCategory(folder, sub, leaf); } catch (e) {} };
+                const more = n > 1 ? (L() === 'en' ? ` · +${n - 1} more` : ` · +${n - 1} autre${n > 2 ? 's' : ''}`) : '';
+                return `<button class="nw-row" data-hm="${esc(id)}"><span class="ri">${LEAFIC[leaf] || '📕'}</span>
+                  <span class="rt"><b>${esc(what)}</b><small>${esc(g.files[0].name.replace(/\.pdf$/i, ''))}${more}</small></span>
+                  <span class="rm">${fresh ? `<em>${L() === 'en' ? 'NEW' : 'NOUVEAU'}</em>` : ''}${esc(ago(g.ts))}</span></button>`;
+              }).join('') + `</div>`;
+          }
         }
       } catch (e) {}
       const sections = [];
