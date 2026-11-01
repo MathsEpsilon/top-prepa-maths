@@ -892,6 +892,17 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
             <option value="" data-i18n="phCity">Sélectionnez votre ville</option>
           </select>
         </div>
+        <div class="field">
+          <label data-i18n="lblSection">🎓 Ma section (obligatoire)</label>
+          <select id="suSection" required style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; background:#fff;">
+            <option value="" data-i18n="phSection">Sélectionnez votre section</option>
+            <option value="pcpt">PC-PT — 1re année</option>
+            <option value="m">M — 1re année</option>
+            <option value="spst">SP-ST — 2e année</option>
+            <option value="sm">SM — 2e année</option>
+            <option value="autre" data-i18n="secOther">Autre (Bac, Licence…)</option>
+          </select>
+        </div>
         <button class="btn-main" onclick="doSignup()" data-i18n="btnSignup">Créer mon compte</button>
       </div>
       <div id="confirmPanel" style="display:none; text-align:center">
@@ -1221,6 +1232,11 @@ const I18N = {
   errLoginConn:   { fr:'Erreur de connexion', en:'Connection error' },
   errPassWrong:   { fr:'Mot de passe incorrect', en:'Incorrect password' },
   errFillAll:     { fr:'Veuillez remplir tous les champs', en:'Please fill in all fields' },
+  lblSection:     { fr:'🎓 Ma section (obligatoire)', en:'🎓 My class (required)' },
+  phSection:      { fr:'Sélectionnez votre section', en:'Select your class' },
+  secOther:       { fr:'Autre (Bac, Licence…)', en:'Other (Bac, Bachelor…)' },
+  errSection:     { fr:'Veuillez choisir votre section', en:'Please choose your class' },
+  errSectionLock: { fr:"🔒 Ce dossier est réservé à une autre section.", en:'🔒 This folder is reserved for another class.' },
   errRegionCity:  { fr:'Veuillez sélectionner votre région et votre ville', en:'Please select your region and city' },
   errUserTaken:   { fr:'Cet identifiant est déjà pris', en:'This username is already taken' },
   errCreateFail:  { fr:'Erreur lors de la création', en:'Error creating account' },
@@ -1287,6 +1303,55 @@ const LEGACY_FOLDERS = {
   p_classe_pt:   ['p_classe_p', 'p_classe_t'],
   d_classe_spst: ['d_classe_sp', 'd_classe_st']
 };
+/* ================= Sections : chaque étudiant n'accède qu'à sa classe ================= */
+const SECTIONS = {
+  pcpt:  { label:'PC-PT (1re année)', folders:['p_classe_pt','p_classe_p','p_classe_t'] },
+  m:     { label:'M (1re année)',     folders:['p_classe_m'] },
+  spst:  { label:'SP-ST (2e année)',  folders:['d_classe_spst','d_classe_sp','d_classe_st'] },
+  sm:    { label:'SM (2e année)',     folders:['d_classe_sm'] },
+  autre: { label:'Autre (Bac, Licence…)', folders:[] }
+};
+// false : l'étudiant voit sa section + les dossiers communs (Divers, Bac, Licence, tableau blanc, live)
+// true  : l'étudiant ne voit QUE sa section (les dossiers communs sont masqués aussi)
+const SECTION_SEULEMENT = false;
+const CLASS_FOLDERS = [].concat(...Object.values(SECTIONS).map(x => x.folders));
+const COMMON_FOLDERS = ['divers_main', 'bac_main', 'licence'];
+function sectionLabel(sec) { return (SECTIONS[sec] && SECTIONS[sec].label) || '— non précisée —'; }
+function isAdminNow() { return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin'; }
+function folderAllowed(id) {
+  if (!id || typeof currentUser === 'undefined' || !currentUser || isAdminNow()) return true;
+  const sec = SECTIONS[currentUser.section];
+  if (CLASS_FOLDERS.includes(id)) return !!sec && sec.folders.includes(id);
+  if (SECTION_SEULEMENT && COMMON_FOLDERS.includes(id)) return false;
+  return true;
+}
+function pathAllowed(p) {
+  p = String(p || '');
+  if (p === 'licence__') return folderAllowed('licence');
+  const f = ALL_FOLDER_IDS.find(fd => p.indexOf(fd + '_') === 0);
+  if (f) return folderAllowed(f);
+  if (p.indexOf('divers_main') === 0) return folderAllowed('divers_main');
+  return true;
+}
+// Visibilité d'un élément de STRUCTURE (titres d'année masqués s'ils sont vides)
+function structItemVisible(item) {
+  if (isAdminNow()) return true;
+  if (item.type === 'folder') return folderAllowed(item.id);
+  if (item.type === 'title' && item.id) return folderAllowed(item.id);
+  const idx = STRUCTURE.indexOf(item);
+  if (item.type === 'year' || (item.type === 'title' && !item.id)) {
+    const g = (currentUser && currentUser.group) || 'prepa';
+    for (let k = idx + 1; k < STRUCTURE.length; k++) {
+      const it = STRUCTURE[k];
+      if (it.type === 'title') break;
+      if (item.type === 'year' && it.type === 'year') break;
+      if (it.type === 'folder' && (!it.groups || it.groups.includes(g)) && folderAllowed(it.id)) return true;
+    }
+    return false;
+  }
+  return true;
+}
+
 function pathKeysFor(folder, sub, leaf) {
   const keys = [`${folder}_${sub}_${leaf}`];
   (LEGACY_FOLDERS[folder] || []).forEach(old => keys.push(`${old}_${sub}_${leaf}`));
@@ -1438,6 +1503,8 @@ function checkSession() {
           if (msg) showMsg(msg, I18N.errBlocked[lang], true);
           return;
         }
+        u.section = doc.data().section || '';
+        u.group = doc.data().group || u.group;
         loginAs(u);
       }).catch(() => loginAs(u));
     } else {
@@ -1478,6 +1545,8 @@ function loginAs(userObj) {
     // pas encore branché. Remets `= 'inline-block'` une fois Konnect prêt.
     document.getElementById('subBtn').style.display = 'none';
   }
+
+  setTimeout(askSectionIfMissing, 300);  // ✅ Section manquante → on la demande
 
   // Enclenchement de la présence temps réel et écoutes Firebase
   setUserPresence(currentUser.username, true);
@@ -1583,6 +1652,7 @@ function verifyPassword(user, pass, msgEl) {
       city: user.city || '',
       role: user.role,
       group: user.group,
+      section: user.section || '',
       subscription: user.subscription || null
     };
     loginAs(fullUser);
@@ -1615,10 +1685,12 @@ function doSignup() {
   const email = document.getElementById('suEmail').value.trim().toLowerCase();
   const region = document.getElementById('suRegion').value.trim();
   const city = document.getElementById('suCity').value.trim();
+  const section = document.getElementById('suSection').value;
   const msg = document.getElementById('authMsg');
 
   if(!name || !user || !email) { showMsg(msg, I18N.errFillAll[lang], true); return; }
   if(!region || !city) { showMsg(msg, I18N.errRegionCity[lang], true); return; }
+  if(!SECTIONS[section]) { showMsg(msg, I18N.errSection[lang], true); return; }
 
   db.collection('users').doc(user).get().then(doc => {
     if(doc.exists) { showMsg(msg, I18N.errUserTaken[lang], true); return; }
@@ -1642,6 +1714,7 @@ function doSignup() {
       password: generatedPassword,
       role: 'student',
       group: studentGroup,
+      section: section,
       approved: false,  // ✅ Compte en attente d'approbation
       status: 'pending',  // ✅ État : 'pending', 'approved', 'blocked'
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1797,7 +1870,8 @@ function renderUsersList(snap) {
     row.className = 'top-item user-row';
     row.title = u.email || '';
     const blockedTag = u.blocked ? `<span class="user-blocked-tag">${I18N.tagBlocked[lang]}</span>` : '';
-    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>`;
+    if (currentUser && currentUser.role === 'admin') row.appendChild(sectionPicker(doc.id, u.section));
 
     /* --- Actions admin : bloquer / débloquer / supprimer --- */
     if (currentUser && currentUser.role === 'admin') {
@@ -1842,7 +1916,8 @@ function renderPendingApproval(snap) {
     const row = document.createElement('div');
     row.className = 'top-item user-row';
     row.title = u.email || '';
-    row.innerHTML = `<div class="row-top"><span style="color:#b45309; font-weight:700;">⏳ ${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div>`;
+    row.innerHTML = `<div class="row-top"><span style="color:#b45309; font-weight:700;">⏳ ${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>`;
+    if (currentUser && currentUser.role === 'admin') row.appendChild(sectionPicker(doc.id, u.section));
 
     /* --- Actions admin : Approuver / Rejeter --- */
     if (currentUser && currentUser.role === 'admin') {
@@ -1881,7 +1956,7 @@ function exportUsersCSV() {
     return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
 
-  const headers = ['Nom', 'Identifiant', 'Email', 'Région', 'Ville', 'Groupe', 'Bloqué'];
+  const headers = ['Nom', 'Identifiant', 'Email', 'Région', 'Ville', 'Groupe', 'Section', 'Bloqué'];
   const rows = [headers.join(';')];
 
   snap.docs
@@ -1896,6 +1971,7 @@ function exportUsersCSV() {
         escCsv(u.region),
         escCsv(u.city),
         escCsv(u.group === 'saudi' ? 'Saoudien(ne)' : 'Préparatoire'),
+        escCsv(sectionLabel(u.section)),
         escCsv(u.blocked ? 'Oui' : 'Non')
       ].join(';'));
     });
@@ -1940,6 +2016,47 @@ function adminToggleBlockUser(username, isCurrentlyBlocked) {
   }).catch(err => {
     console.error('Échec du blocage/déblocage :', err);
     alert(`${I18N.errBlockFail[lang]} : ${err.message || err}`);
+  });
+}
+
+/* ✅ Admin : choisir / changer la section d'un étudiant */
+function sectionPicker(username, current) {
+  const sel = document.createElement('select');
+  sel.style.cssText = 'margin:6px 0 2px; padding:5px 8px; border-radius:8px; border:1.5px solid #cbd5e1; font-size:13px; max-width:100%;';
+  sel.innerHTML = `<option value="">🎓 Section…</option>` +
+    Object.keys(SECTIONS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${SECTIONS[k].label}</option>`).join('');
+  sel.onclick = e => e.stopPropagation();
+  sel.onchange = e => { e.stopPropagation(); adminSetSection(username, sel.value); };
+  return sel;
+}
+function adminSetSection(username, sec) {
+  if (!currentUser || currentUser.role !== 'admin' || !SECTIONS[sec]) return;
+  db.collection('users').doc(username).update({ section: sec })
+    .then(() => showToast(`🎓 ${username} → ${SECTIONS[sec].label}`))
+    .catch(err => alert(`Erreur : ${err.message || err}`));
+}
+
+/* ✅ Étudiant inscrit avant cette mise à jour : il choisit sa section une seule fois */
+function askSectionIfMissing() {
+  if (!currentUser || currentUser.role === 'admin' || SECTIONS[currentUser.section]) return;
+  if (document.getElementById('secAsk')) return;
+  const box = document.createElement('div');
+  box.id = 'secAsk';
+  box.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(15,23,42,.6); display:flex; align-items:center; justify-content:center; padding:20px;';
+  box.innerHTML = `<div style="background:#fff; color:#0f172a; border-radius:18px; padding:26px; max-width:440px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,.35); font-family:inherit;">
+    <h3 style="margin:0 0 8px; color:#0f2a5c;">🎓 ${lang === 'en' ? 'Choose your class' : 'Choisissez votre section'}</h3>
+    <p style="margin:0 0 16px; font-size:14px; color:#475569;">${lang === 'en' ? 'You will only see the documents of your class. Only the administrator can change it afterwards.' : "Vous verrez uniquement les documents de votre section. Seul l'administrateur pourra la modifier ensuite."}</p>
+    ${Object.keys(SECTIONS).map(k => `<button data-sec="${k}" style="display:block; width:100%; margin:0 0 8px; padding:12px; border:none; border-radius:12px; cursor:pointer; font-size:15px; font-weight:700; color:#fff; background:linear-gradient(135deg,#1d4ed8,#7c3aed);">${SECTIONS[k].label}</button>`).join('')}
+  </div>`;
+  document.body.appendChild(box);
+  box.querySelectorAll('button[data-sec]').forEach(b => b.onclick = () => {
+    const sec = b.dataset.sec;
+    if (!confirm((lang === 'en' ? 'Confirm: ' : 'Confirmer : ') + SECTIONS[sec].label + ' ?')) return;
+    db.collection('users').doc(currentUser.username).update({ section: sec }).then(() => {
+      currentUser.section = sec;
+      localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
+      location.reload();
+    }).catch(err => alert(`Erreur : ${err.message || err}`));
   });
 }
 
@@ -2225,7 +2342,8 @@ function startRealtimeListeners() {
       // Copie légère (sans le contenu base64) pour la recherche et les badges
       all.push({ id: doc.id, name: d.name, path: d.path, downloads: d.downloads || 0, views: d.views || 0, ts: d.ts || 0, date: d.date || '', size: d.size || '' });
     });
-    window.allFiles = all;
+    window._allFilesRaw = all;
+    window.allFiles = all.filter(f => pathAllowed(f.path));  // ✅ Seulement la section de l'étudiant
     ensureSeenInit();
     buildSidebar(); // met à jour les badges rouges « nouveau document »
 
@@ -2267,6 +2385,7 @@ function buildSidebar() {
   STRUCTURE.forEach(item => {
     // ✅ Vérifier les permissions: afficher seulement si le groupe est autorisé
     if (item.groups && !item.groups.includes(userGroup)) return;
+    if (!structItemVisible(item)) return;  // ✅ Seulement la section de l'étudiant
 
     if(item.type === 'title') {
       const div = document.createElement('div');
@@ -2348,6 +2467,7 @@ function closeMobileMenu() {
 }
 
 function selectCategory(fId, sub, leaf) {
+  if (!folderAllowed(fId)) { showToast(I18N.errSectionLock[lang]); return; }
   activeFolder = fId;
   activeSub = sub;
   activeLeaf = leaf;
@@ -2471,6 +2591,7 @@ function previewPdf(id, name) {
   db.collection('files').doc(id).get().then(doc => {
     if (!doc.exists) return;
     const data = doc.data();
+    if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
     try {
       const parts = String(data.content).split(',');
       const bin = atob(parts[1]);
@@ -3333,6 +3454,7 @@ function downloadPdf(id, name) {
   db.collection('files').doc(id).get().then(doc => {
     if(!doc.exists) return;
     const data = doc.data();
+    if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
 
     const link = document.createElement('a');
     link.href = data.content;
@@ -7013,7 +7135,7 @@ body.pg-noarrows .pg-arrow { display:none; }
     } catch (e) { console.error(e); toast('⚠️ ' + t('loadErr')); }
   }
   async function importSiteFile(id) {
-    try { const d = await db.collection('files').doc(id).get(); if (!d.exists) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
+    try { const d = await db.collection('files').doc(id).get(); if (!d.exists || !pathAllowed(d.data().path)) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
     catch (e) { onErr(e); toast('⚠️ ' + t('loadErr')); }
   }
   function sharePdf(id, name) {
@@ -7049,7 +7171,7 @@ body.pg-noarrows .pg-arrow { display:none; }
   async function openShared() {
     const p = state && state.pdf; if (!p) return;
     try {
-      const d = await db.collection('files').doc(p.id).get(); if (!d.exists) return;
+      const d = await db.collection('files').doc(p.id).get(); if (!d.exists || !pathAllowed(d.data().path)) return;
       const bytes = dataUriToBytes(d.data().content);
       if (frameUrl) URL.revokeObjectURL(frameUrl);
       frameUrl = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
@@ -7271,7 +7393,7 @@ body.nav-icons aside.nav, body.nav-icons .sidebar-resizer { display:none !import
     return c;
   }
   const userGroup = () => (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.group || 'prepa') : 'prepa';
-  const allowed = it => !it.groups || it.groups.includes(userGroup()) || (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin');
+  const allowed = it => (!it.groups || it.groups.includes(userGroup()) || (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin')) && structItemVisible(it);
   const leavesFor = fid => fid.includes('divers_main') ? DIVERS_CATEGORIES : fid.includes('bac_main') ? BAC_CATEGORIES : SUB_CATEGORIES;
 
   /* ---------- Vue d'accueil ---------- */
