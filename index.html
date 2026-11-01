@@ -8630,5 +8630,217 @@ body.nav-icons #zoomWidget { left:110px !important; }
   window.ccOrganizeNames = organize; window.ccAnalyseName = analyse; window.ccBuildName = build;
 })();
 </script>
+
+<!-- ================= Signal des nouveaux documents (cloche, bandeau, pop-up) ================= -->
+<style>
+#ccBell .hbd { position:absolute; top:-5px; right:-5px; background:#dc2626; color:#fff; font-size:10.5px; border-radius:99px; padding:1px 6px; font-weight:800; box-shadow:0 0 0 2px rgba(255,255,255,.7); }
+#ccBell.ring { animation:ccRing 1.2s ease-in-out 3; }
+@keyframes ccRing { 0%,100%{transform:rotate(0)} 15%{transform:rotate(14deg)} 30%{transform:rotate(-12deg)} 45%{transform:rotate(8deg)} 60%{transform:rotate(-5deg)} }
+#ccNewPanel { position:fixed; top:70px; right:18px; width:min(430px,94vw); max-height:72vh; z-index:99980; display:none; flex-direction:column; overflow:hidden;
+  background:var(--carte,#fff); color:var(--texte,#0f172a); border-radius:18px; box-shadow:0 28px 60px -18px rgba(0,0,0,.5); border:1px solid var(--bord,#e2e8f0); }
+#ccNewPanel.show { display:flex; }
+#ccNewPanel .np-hd { padding:14px 16px; color:#fff; background:linear-gradient(135deg,#e11d48,#f59e0b); display:flex; align-items:center; gap:8px; }
+#ccNewPanel .np-hd b { flex:1; font-size:16px; } #ccNewPanel .np-hd button { border:none; background:rgba(255,255,255,.22); color:#fff; border-radius:9px; padding:5px 9px; cursor:pointer; font-weight:700; }
+#ccNewPanel .np-list { overflow:auto; padding:6px; }
+.np-it { display:flex; gap:10px; align-items:center; width:100%; text-align:left; border:none; background:transparent; color:inherit; padding:10px; border-radius:12px; cursor:pointer; }
+.np-it:hover { background:var(--surf2,#f1f5f9); }
+.np-it .ic { width:40px; height:40px; flex:none; border-radius:11px; display:grid; place-items:center; font-size:20px; color:#fff; }
+.np-it .tx { min-width:0; } .np-it b { display:block; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.np-it small { color:var(--gris,#64748b); font-size:12px; }
+.np-empty { padding:26px 16px; text-align:center; color:var(--gris,#64748b); }
+#ccNewBan { position:relative; margin:4px 0 18px; border-radius:20px; padding:16px 18px; color:#fff; overflow:hidden;
+  background:linear-gradient(120deg,#e11d48,#f59e0b 55%,#f97316); box-shadow:0 18px 34px -16px rgba(225,29,72,.6); }
+#ccNewBan::before { content:''; position:absolute; inset:0; background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.28) 50%,transparent 70%); background-size:250% 100%; animation:ccShine 3.5s linear infinite; pointer-events:none; }
+@keyframes ccShine { from{background-position:150% 0} to{background-position:-100% 0} }
+#ccNewBan .nb-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+#ccNewBan .nb-top h4 { margin:0; font-size:19px; flex:1; } #ccNewBan .nb-pulse { width:12px; height:12px; border-radius:50%; background:#fff; animation:ccPulse 1.4s infinite; }
+@keyframes ccPulse { 0%{box-shadow:0 0 0 0 rgba(255,255,255,.8)} 100%{box-shadow:0 0 0 14px rgba(255,255,255,0)} }
+#ccNewBan .nb-top button { border:none; border-radius:10px; padding:7px 12px; font-weight:800; cursor:pointer; background:rgba(255,255,255,.95); color:#be123c; }
+#ccNewBan .nb-top button.lt { background:rgba(255,255,255,.2); color:#fff; }
+#ccNewBan .nb-row { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory; }
+#ccNewBan .nb-card { flex:none; width:230px; scroll-snap-align:start; text-align:left; border:none; cursor:pointer; border-radius:14px; padding:12px; background:rgba(255,255,255,.96); color:#0f172a; transition:transform .15s; }
+#ccNewBan .nb-card:hover { transform:translateY(-3px); }
+#ccNewBan .nb-card b { display:block; font-size:13.5px; line-height:1.3; margin:4px 0; max-height:2.6em; overflow:hidden; }
+#ccNewBan .nb-card small { color:#64748b; font-size:11.5px; } #ccNewBan .nb-card em { font-style:normal; font-size:10.5px; font-weight:800; color:#fff; background:#e11d48; border-radius:6px; padding:2px 6px; }
+#ccNewPop { position:fixed; left:50%; bottom:24px; transform:translate(-50%,140%); z-index:99985; display:flex; align-items:center; gap:12px; max-width:min(560px,94vw);
+  padding:14px 16px; border-radius:18px; color:#fff; background:linear-gradient(135deg,#be123c,#f59e0b); box-shadow:0 24px 50px -16px rgba(0,0,0,.55); transition:transform .45s cubic-bezier(.2,1.3,.4,1); }
+#ccNewPop.show { transform:translate(-50%,0); }
+#ccNewPop .pp-ic { font-size:30px; } #ccNewPop .pp-tx { flex:1; font-size:14px; } #ccNewPop .pp-tx b { font-size:16px; display:block; }
+#ccNewPop button { border:none; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
+#ccNewPop .pp-go { background:#fff; color:#be123c; } #ccNewPop .pp-x { background:rgba(255,255,255,.2); color:#fff; }
+</style>
+<div id="ccNewPanel"></div>
+<div id="ccNewPop"></div>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const EN = () => typeof lang !== 'undefined' && lang === 'en';
+  const T = (fr, en) => EN() ? en : fr;
+  const ICON = { 'Devoir surveillé':['⏱️', '#d97706'], 'Examen':['🎓', '#e11d48'], 'Cours':['📘', '#2563eb'], 'Séries corrigées':['✅', '#059669'], 'TD':['✏️', '#7c3aed'],
+    'Devoirs corrigés':['📝', '#d97706'], 'Résumé de cours':['📒', '#2563eb'], 'Exercices corrigés':['✅', '#059669'], 'Problème corrigé':['🧩', '#7c3aed'], 'Ancien sujet corrigé':['🗂️', '#d97706'] };
+
+  /* ---------- Liste des nouveaux documents (uniquement ceux de la section de l'étudiant) ---------- */
+  function newDocs() {
+    const out = [];
+    (window.allFiles || []).forEach(f => { let n = false; try { n = isNewFile(f); } catch (e) {} if (n) out.push(f); });
+    return out.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  }
+  function where(f) {
+    let loc = null; try { loc = parsePath(f.path); } catch (e) {}
+    if (!loc) return '';
+    try { return folderLabel(loc.folder) + (loc.sub ? ' › ' + trNav(loc.sub) : '') + (loc.leaf ? ' › ' + trNav(loc.leaf) : ''); } catch (e) { return ''; }
+  }
+  function leafOf(f) { try { const l = parsePath(f.path); return l ? l.leaf : ''; } catch (e) { return ''; } }
+  function ago(ts) {
+    if (!ts) return '';
+    const m = Math.round((Date.now() - ts) / 60000);
+    if (m < 60) return T(`il y a ${Math.max(m, 1)} min`, `${Math.max(m, 1)} min ago`);
+    const h = Math.round(m / 60); if (h < 24) return T(`il y a ${h} h`, `${h} h ago`);
+    const d = Math.round(h / 24); return d === 1 ? T('hier', 'yesterday') : T(`il y a ${d} jours`, `${d} days ago`);
+  }
+  function open(id) {
+    const f = (window.allFiles || []).find(x => x.id === id); if (!f) return;
+    closePanel(); hidePop();
+    try { goToFile(f); } catch (e) {}
+    setTimeout(update, 1200);
+  }
+  function markAll() {
+    const docs = newDocs(); if (!docs.length) return;
+    try { markSeen(Array.from(new Set(docs.map(f => f.path)))); } catch (e) {}
+    update(); renderPanel();
+  }
+
+  /* ---------- 1) Cloche 🔔 dans l'en-tête ---------- */
+  function ensureBell() {
+    const hb = $('ccHdr'); if (!hb) return null;
+    let b = $('ccBell');
+    if (!b) { b = document.createElement('button'); b.className = 'hdr-ic'; b.id = 'ccBell'; b.title = T('Nouveaux documents', 'New documents');
+      b.innerHTML = '🔔<span class="hbd" style="display:none"></span>'; b.onclick = togglePanel; hb.insertBefore(b, hb.firstChild); }
+    return b;
+  }
+  /* ---------- Panneau de la cloche ---------- */
+  function renderPanel() {
+    const p = $('ccNewPanel'); if (!p) return;
+    const docs = newDocs();
+    p.innerHTML = `<div class="np-hd"><b>🆕 ${T('Nouveaux documents', 'New documents')} (${docs.length})</b>
+        ${docs.length ? `<button id="npAll">${T('Tout marquer comme vu', 'Mark all as seen')}</button>` : ''}<button id="npX">✕</button></div>
+      <div class="np-list">${docs.length ? docs.slice(0, 40).map(f => { const ic = ICON[leafOf(f)] || ['📕', '#475569'];
+        return `<button class="np-it" data-id="${esc(f.id)}"><span class="ic" style="background:${ic[1]}">${ic[0]}</span><span class="tx"><b>${esc(f.name)}</b><small>${esc(where(f))} · ${esc(ago(f.ts))}</small></span></button>`; }).join('')
+        : `<div class="np-empty">✅ ${T('Vous avez tout vu. Aucun nouveau document pour le moment.', 'All caught up. No new documents.')}</div>`}</div>`;
+    $('npX').onclick = closePanel; if ($('npAll')) $('npAll').onclick = markAll;
+    p.querySelectorAll('.np-it').forEach(x => x.onclick = () => open(x.dataset.id));
+  }
+  function togglePanel() { const p = $('ccNewPanel'); if (p.classList.contains('show')) closePanel(); else { renderPanel(); p.classList.add('show'); hidePop(); } }
+  function closePanel() { const p = $('ccNewPanel'); if (p) p.classList.remove('show'); }
+  document.addEventListener('click', e => { const p = $('ccNewPanel'); if (p && p.classList.contains('show') && !p.contains(e.target) && !e.target.closest('#ccBell')) closePanel(); });
+
+  /* ---------- 2) Bandeau animé sur l'accueil ---------- */
+  function renderBanner() {
+    const hv = $('homeView'); if (!hv || hv.style.display === 'none') return;
+    const atRoot = !hv.querySelector('.hm-crumbs');
+    let ban = $('ccNewBan');
+    const docs = newDocs();
+    if (!atRoot || !docs.length) { if (ban) ban.remove(); return; }
+    const html = `<div class="nb-top"><span class="nb-pulse"></span><h4>🆕 ${docs.length} ${T(docs.length > 1 ? 'nouveaux documents ajoutés pour vous' : 'nouveau document ajouté pour vous', docs.length > 1 ? 'new documents added for you' : 'new document added for you')}</h4>
+        <button class="lt" data-nb="all">${T('Tout marquer comme vu', 'Mark all as seen')}</button><button data-nb="list">${T('Voir la liste', 'See the list')}</button></div>
+      <div class="nb-row">${docs.slice(0, 12).map(f => { const ic = ICON[leafOf(f)] || ['📕', '#475569'];
+        return `<button class="nb-card" data-id="${esc(f.id)}"><em>${T('NOUVEAU', 'NEW')}</em> <span style="font-size:18px">${ic[0]}</span><b>${esc(f.name)}</b><small>${esc(where(f))}<br>${esc(ago(f.ts))}</small></button>`; }).join('')}</div>`;
+    if (!ban) { ban = document.createElement('div'); ban.id = 'ccNewBan';
+      ban.addEventListener('click', e => { const c = e.target.closest('[data-id]'); if (c) return open(c.dataset.id);
+        const b = e.target.closest('[data-nb]'); if (!b) return; if (b.dataset.nb === 'all') markAll(); else togglePanel(); }); }
+    if (ban.dataset.sig !== html) { ban.innerHTML = html; ban.dataset.sig = html; }
+    const head = hv.querySelector('.hm-head');
+    if (head && ban.previousSibling !== head) head.after(ban); else if (!head && ban.parentNode !== hv) hv.prepend(ban);
+  }
+
+  /* ---------- 3) Pop-up à l'arrivée sur le site (une fois par visite) ---------- */
+  let popShown = false;
+  function showPop(docs) {
+    const p = $('ccNewPop'); if (!p) return;
+    const first = docs[0];
+    p.innerHTML = `<span class="pp-ic">📢</span><span class="pp-tx"><b>${docs.length} ${T(docs.length > 1 ? 'nouveaux documents !' : 'nouveau document !', docs.length > 1 ? 'new documents!' : 'new document!')}</b>
+      ${esc(first.name)}${docs.length > 1 ? T(` et ${docs.length - 1} autre(s)`, ` and ${docs.length - 1} more`) : ''}</span>
+      <button class="pp-go">${T('Voir', 'See')}</button><button class="pp-x">✕</button>`;
+    p.querySelector('.pp-go').onclick = () => { hidePop(); docs.length === 1 ? open(first.id) : togglePanel(); };
+    p.querySelector('.pp-x').onclick = hidePop;
+    requestAnimationFrame(() => p.classList.add('show'));
+    setTimeout(hidePop, 12000);
+  }
+  function hidePop() { const p = $('ccNewPop'); if (p) p.classList.remove('show'); }
+
+  /* ---------- Mise à jour générale ---------- */
+  let lastCount = -1;
+  function update() {
+    if (typeof currentUser === 'undefined' || !currentUser) return;
+    const docs = newDocs(), b = ensureBell();
+    if (b) { const bd = b.querySelector('.hbd'); bd.style.display = docs.length ? 'inline-block' : 'none'; bd.textContent = docs.length > 99 ? '99+' : docs.length;
+      if (docs.length > lastCount && lastCount !== -1) { b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring'); } }
+    if (lastCount === -1 && window.allFiles && window.allFiles.length) {
+      if (!popShown && docs.length && !sessionStorage.getItem('tpm_newpop')) { popShown = true; try { sessionStorage.setItem('tpm_newpop', '1'); } catch (e) {} setTimeout(() => showPop(docs), 1500); if (b) b.classList.add('ring'); }
+      lastCount = docs.length;
+    } else if (window.allFiles) {
+      if (docs.length > lastCount && lastCount !== -1) showPop(docs);   // document ajouté pendant que l'étudiant est connecté
+      lastCount = docs.length;
+    }
+    renderBanner();
+    if ($('ccNewPanel') && $('ccNewPanel').classList.contains('show')) renderPanel();
+    try { document.title = (docs.length ? `(${docs.length}) ` : '') + document.title.replace(/^\(\d+\+?\)\s*/, ''); } catch (e) {}
+  }
+  // À chaque arrivée de nouveaux fichiers (onSnapshot → buildSidebar) et à chaque affichage de l'accueil
+  if (typeof buildSidebar === 'function') { const _bs = window.buildSidebar || buildSidebar; window.buildSidebar = function () { const r = _bs.apply(this, arguments); try { update(); } catch (e) {} return r; }; }
+  const watch = () => { const hv = $('homeView'); if (!hv || hv._ccNew) return !!hv; hv._ccNew = true;
+    new MutationObserver(() => { if (!$('ccNewBan') || !hv.contains($('ccNewBan'))) renderBanner(); }).observe(hv, { childList:true }); return true; };
+  const iv = setInterval(() => { ensureBell(); if (watch()) { update(); } }, 1500);
+  setTimeout(() => clearInterval(iv), 60000);
+})();
+</script>
+
+<!-- ================= Noms toujours à jour (Reprendre, Récents, Favoris…) ================= -->
+<script>
+(function () {
+  'use strict';
+  /* Les listes « Reprendre là où vous étiez », Récents, Favoris… gardent dans le navigateur le nom
+     qu'avait le document quand il a été ouvert. Ici, on les remet automatiquement à jour avec le nom
+     actuel du document (après « Organiser les noms »), et on retire les documents supprimés. */
+  let lastSig = '';
+  function syncNames() {
+    const all = window._allFilesRaw || window.allFiles;
+    if (!all || !all.length) return;
+    const byId = {}; all.forEach(f => { byId[f.id] = f; });
+    const allowed = {}; (window.allFiles || all).forEach(f => { allowed[f.id] = true; });
+    const sig = all.map(f => f.id + ':' + f.name).join('|');
+    if (sig === lastSig) return; lastSig = sig;
+    const renamed = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf('tpm_') !== 0) continue;
+      let v; try { v = JSON.parse(localStorage.getItem(k)); } catch (e) { continue; }
+      if (!Array.isArray(v) || !v.some(x => x && typeof x === 'object' && x.id && 'name' in x)) continue;
+      let changed = false;
+      const out = v.filter(x => {
+        if (!x || typeof x !== 'object' || !x.id || !('name' in x)) return true;
+        // ne toucher qu'aux entrées qui désignent un document du site
+        if (!byId[x.id]) { if (/^tpm_(rec|favs)_/.test(k)) { changed = true; return false; } return true; }   // document supprimé
+        if (!allowed[x.id]) { changed = true; return false; }                                                // hors de la section de l'étudiant
+        const nm = byId[x.id].name;
+        if (nm && x.name !== nm) { renamed[x.name] = nm; x.name = nm; changed = true; }
+        return true;
+      });
+      if (changed) { try { localStorage.setItem(k, JSON.stringify(out)); } catch (e) {} }
+    }
+    // Titre de l'aperçu ouvert
+    const pt = document.getElementById('previewTitle');
+    if (pt && renamed[pt.textContent]) pt.textContent = renamed[pt.textContent];
+  }
+  window.ccSyncNames = syncNames;
+  // Avant chaque mise à jour de l'affichage (arrivée des fichiers, renommage, retour à l'accueil)
+  const wrap = fn => { if (typeof window[fn] !== 'function') return; const o = window[fn];
+    window[fn] = function () { try { syncNames(); } catch (e) {} return o.apply(this, arguments); }; };
+  wrap('buildSidebar');
+  setTimeout(() => { try { syncNames(); } catch (e) {} }, 2500);
+})();
+</script>
 </body>
 </html>
