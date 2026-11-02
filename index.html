@@ -2508,7 +2508,10 @@ function startRealtimeListeners() {
 
   // 4. Fichiers : total, téléchargements, top 5, consultations et répartition par matière
   db.collection('files').onSnapshot(snap => {
-    document.getElementById('stFiles').innerText = snap.size;
+    // ✅ CORRECTIF « 0 document » : si la liste complète est vide côté étudiant,
+    //    on recharge les métadonnées dossier par dossier (requêtes autorisées).
+    if (snap.empty && !isRealAdmin()) { ccLoadFilesByPath(); return; }
+    const stF = document.getElementById('stFiles'); if (stF) stF.innerText = snap.size;
     let total = 0;
     const all = [];
     snap.forEach(doc => {
@@ -2548,7 +2551,46 @@ function startRealtimeListeners() {
         `<div class="top-item"><span>Algèbre</span><span class="tn">⬇ ${somme(f => p(f).includes('ALG'))}</span></div>` +
         `<div class="top-item"><span>Licence / autres</span><span class="tn">⬇ ${somme(f => !p(f).includes('ANALYSE') && !p(f).includes('ALG'))}</span></div>`;
     }
+  }, err => {
+    // ✅ CORRECTIF : les règles Firestore refusent la LISTE complète de « files »
+    //    aux étudiants → avant, l'erreur était silencieuse et les compteurs restaient à 0.
+    console.warn('Liste complète des fichiers refusée, chargement par dossier :', err && err.code);
+    ccLoadFilesByPath();
   });
+}
+
+/* ================= Chargement des métadonnées par dossier (compteurs étudiants) =================
+   Mêmes requêtes « where path == … » que l'ouverture d'un dossier (elles, autorisées),
+   regroupées par paquets de 10 avec « in ». Seuls nom/chemin/date sont gardés. */
+let ccFbLoading = false;
+function ccAllPathKeys() {
+  const keys = new Set(['licence__', 'divers_main__']);
+  STRUCTURE.filter(it => it.type === 'folder').forEach(it => {
+    (it.sub || ['']).forEach(sub => leafCatsFor(it.id).forEach(leaf => pathKeysFor(it.id, sub, leaf).forEach(k => keys.add(k))));
+  });
+  return [...keys];
+}
+function ccApplyFiles(all) {
+  window._allFilesRaw = all;
+  window.allFiles = all.filter(f => pathAllowed(f.path));
+  try { ensureSeenInit(); } catch (e) {}
+  try { buildSidebar(); } catch (e) {}   // la version enrichie redessine aussi l'accueil (tuiles et compteurs)
+}
+function ccLoadFilesByPath() {
+  if (ccFbLoading) return; ccFbLoading = true;
+  const keys = ccAllPathKeys(), chunks = [];
+  for (let i = 0; i < keys.length; i += 10) chunks.push(keys.slice(i, i + 10));
+  const light = d => { const x = d.data(); return { id: d.id, name: x.name, path: x.path, downloads: x.downloads || 0, views: x.views || 0, ts: x.ts || 0, date: x.date || '', size: x.size || '' }; };
+  const one = ch => db.collection('files').where('path', 'in', ch).get()
+    .catch(() => Promise.all(ch.map(k => db.collection('files').where('path', '==', k).get().catch(() => null)))
+      .then(snaps => ({ docs: [].concat(...snaps.filter(Boolean).map(sn => sn.docs)) })));
+  Promise.all(chunks.map(one)).then(res => {
+    const seen = {}, all = [];
+    res.forEach(r => (r.docs || []).forEach(d => { if (!seen[d.id]) { seen[d.id] = 1; all.push(light(d)); } }));
+    ccApplyFiles(all);
+    const stF = document.getElementById('stFiles'); if (stF) stF.innerText = all.length;
+  }).catch(err => console.error('Comptage des documents impossible :', err))
+    .finally(() => { ccFbLoading = false; });
 }
 
 /* ================= Gestion de la Sidebar Dynamique ================= */
@@ -2900,6 +2942,12 @@ function loadFiles() {
 
     const docs = [];
     fileSnaps.forEach(sn => sn.docs.forEach(d => docs.push(Object.assign({ id: d.id }, d.data()))));
+    // ✅ Filet de sécurité : les documents trouvés en ouvrant un dossier alimentent aussi les compteurs de l'accueil
+    try {
+      const known = new Set((window._allFilesRaw || []).map(f => f.id));
+      const add = docs.filter(f => !known.has(f.id)).map(f => ({ id: f.id, name: f.name, path: f.path, downloads: f.downloads || 0, views: f.views || 0, ts: f.ts || 0, date: f.date || '', size: f.size || '' }));
+      if (add.length) { window._allFilesRaw = (window._allFilesRaw || []).concat(add); window.allFiles = window._allFilesRaw.filter(f => pathAllowed(f.path)); }
+    } catch (e) {}
 
     // ✅ CORRECTION RÉTROACTIVE : les fichiers sans chapter → assigner au premier chapitre gratuit
     // Exécuter pour TOUS (admin et étudiants) pour que l'affichage soit correct
