@@ -2032,7 +2032,9 @@ function renderUsersList(snap) {
     row.className = 'top-item user-row';
     row.title = u.email || '';
     const blockedTag = u.blocked ? `<span class="user-blocked-tag">${I18N.tagBlocked[lang]}</span>` : '';
-    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>`;
+    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>` +
+      (u.strikes ? `<div class="row-loc" style="color:#c2410c; font-weight:700;">⚠️ ${u.strikes} tentative(s) de téléchargement interdite(s)${u.lastStrike && u.lastStrike.doc ? ' — dernière : ' + String(u.lastStrike.doc).replace(/</g, '&lt;') : ''}</div>` : '') +
+      (u.blocked && u.blockedReason ? `<div class="row-loc" style="color:#b91c1c;">⛔ ${String(u.blockedReason).replace(/</g, '&lt;')}</div>` : '');
     if (currentUser && currentUser.role === 'admin') row.appendChild(sectionPicker(doc.id, u.section));
 
     /* --- Actions admin : bloquer / débloquer / supprimer --- */
@@ -2178,7 +2180,10 @@ function adminToggleBlockUser(username, isCurrentlyBlocked) {
   if (!currentUser || currentUser.role !== 'admin') return;
   const confirmMsg = isCurrentlyBlocked ? I18N.confirmUnblockUser[lang] : I18N.confirmBlockUser[lang];
   if (!confirm(confirmMsg)) return;
-  db.collection('users').doc(username).update({ blocked: !isCurrentlyBlocked }).then(() => {
+  const upd = isCurrentlyBlocked
+    ? { blocked: false, strikes: 0, blockedReason: firebase.firestore.FieldValue.delete() }   // déblocage : nouveau départ
+    : { blocked: true };
+  db.collection('users').doc(username).update(upd).then(() => {
     showToast(isCurrentlyBlocked ? I18N.toastUserUnblocked[lang] : I18N.toastUserBlocked[lang]);
     // Si l'utilisateur bloqué est actuellement en ligne, on force sa présence hors-ligne
     if (!isCurrentlyBlocked) db.collection('presence').doc(username).set({ online: false }, { merge: true }).catch(() => {});
@@ -3044,6 +3049,7 @@ function loadFiles() {
 
 /* ================= Affichage en accordéon : chapitres ouvrables/fermables ================= */
 function renderFileRows(container, list, onMove) {
+  ccShowDlNotice();
   const newIds = window._newIds || {};
   list.forEach((f, idx) => {
     const row = document.createElement('div');
@@ -3750,6 +3756,61 @@ function ccCanDownload(path) {
   return true;
 }
 
+/* ⚠️ Tentatives interdites (télécharger un document d'une autre section, ou retélécharger)
+   Après DL_MAX_TENTATIVES, sanction automatique :
+     'bloquer'   → compte bloqué (recommandé : réversible, l'admin peut débloquer ou supprimer)
+     'supprimer' → compte supprimé (si les règles Firestore le refusent, le compte est bloqué) */
+const DL_MAX_TENTATIVES = 3;
+const DL_SANCTION = 'bloquer';
+
+function ccShowDlNotice() {
+  const col = document.getElementById('fileListCol'); if (!col) return;
+  let n = document.getElementById('ccDlWarn');
+  if (isRealAdmin()) { if (n) n.remove(); return; }
+  if (!n) {
+    n = document.createElement('div'); n.id = 'ccDlWarn';
+    n.style.cssText = 'background:#fff7ed; border:1.5px solid #fb923c; color:#9a3412; border-radius:10px; padding:10px 12px; margin:0 0 10px; font-size:13px; line-height:1.45;';
+    col.insertBefore(n, col.firstChild);
+  }
+  n.innerHTML = lang === 'en'
+    ? `⚠️ <b>Download rules</b> — you may download only the documents of <b>your class</b>, <b>once</b> each. Every copy carries your name and a personal code. Any forbidden attempt is recorded: after <b>${DL_MAX_TENTATIVES}</b> attempts your account is <b>${DL_SANCTION === 'supprimer' ? 'deleted' : 'blocked'} automatically</b>.`
+    : `⚠️ <b>Règlement des téléchargements</b> — vous ne pouvez télécharger que les documents de <b>votre section</b>, <b>une seule fois</b> chacun. Chaque copie porte votre nom et un code personnel. Toute tentative interdite est enregistrée : après <b>${DL_MAX_TENTATIVES}</b> tentatives, votre compte est <b>${DL_SANCTION === 'supprimer' ? 'supprimé' : 'bloqué'} automatiquement</b>.`;
+}
+
+async function ccStrike(motif, docName) {
+  if (isRealAdmin()) return;                       // l'admin (y compris en mode aperçu) n'est jamais sanctionné
+  const T = (fr, en) => lang === 'en' ? en : fr;
+  const ref = db.collection('users').doc(currentUser.username);
+  let n = 0;
+  try {
+    await ref.update({ strikes: firebase.firestore.FieldValue.increment(1),
+                       lastStrike: { motif, doc: docName || '', ts: Date.now() } });
+    n = ((await ref.get()).data().strikes) || 1;
+  } catch (e) {                                    // règles Firestore trop strictes : compteur local en secours
+    const k = 'tpm_strikes_' + currentUser.username;
+    n = (+localStorage.getItem(k) || 0) + 1; localStorage.setItem(k, n);
+  }
+  if (n >= DL_MAX_TENTATIVES) { await ccSanction(n, motif); return; }
+  const reste = DL_MAX_TENTATIVES - n;
+  alert(T(`⚠️ AVERTISSEMENT ${n}/${DL_MAX_TENTATIVES}\n\n${motif}\n\nCette tentative a été enregistrée et signalée au professeur.\nEncore ${reste} tentative${reste > 1 ? 's' : ''} et votre compte sera ${DL_SANCTION === 'supprimer' ? 'SUPPRIMÉ' : 'BLOQUÉ'} automatiquement.`,
+          `⚠️ WARNING ${n}/${DL_MAX_TENTATIVES}\n\n${motif}\n\nThis attempt has been recorded and reported to the teacher.\n${reste} more attempt${reste > 1 ? 's' : ''} and your account will be ${DL_SANCTION === 'supprimer' ? 'DELETED' : 'BLOCKED'} automatically.`));
+}
+
+async function ccSanction(n, motif) {
+  const T = (fr, en) => lang === 'en' ? en : fr;
+  const ref = db.collection('users').doc(currentUser.username);
+  let supprime = false;
+  if (DL_SANCTION === 'supprimer') { try { await ref.delete(); supprime = true; } catch (e) {} }
+  if (!supprime) {
+    await ref.update({ blocked: true, blockedAt: Date.now(),
+      blockedReason: `Automatique : ${n} tentatives de téléchargement non autorisées (dernière : ${motif})` }).catch(() => {});
+  }
+  db.collection('presence').doc(currentUser.username).set({ online: false }, { merge: true }).catch(() => {});
+  alert(T(`⛔ Votre compte a été ${supprime ? 'supprimé' : 'bloqué'} automatiquement.\n\nMotif : ${n} tentatives de téléchargement non autorisées.\nContactez votre professeur.`,
+          `⛔ Your account has been ${supprime ? 'deleted' : 'blocked'} automatically.\n\nReason: ${n} unauthorized download attempts.\nContact your teacher.`));
+  logout();
+}
+
 /* Mémoire locale des téléchargements (pour l'affichage des boutons) */
 function ccDlKey() { return 'tpm_dlonce_' + ((currentUser && currentUser.username) || ''); }
 function ccDlLocal() { try { return JSON.parse(localStorage.getItem(ccDlKey()) || '{}'); } catch (e) { return {}; } }
@@ -3835,10 +3896,9 @@ function downloadPdf(id, name) {
 
     // 1) Section : lecture seule pour les autres sections
     if (!ccCanDownload(path)) {
-      alert(SECTIONS[mySection()]
-        ? T(`👁 Consultation seule\n\nCe document appartient à une autre section que la vôtre (${sectionLabel(mySection())}).\nVous pouvez le lire en ligne, mais pas le télécharger.`,
-            `👁 Read only\n\nThis document belongs to another class than yours (${sectionLabel(mySection())}).\nYou can read it online but not download it.`)
-        : T('🎓 Choisissez d\'abord votre section pour pouvoir télécharger.', '🎓 Choose your class first to be able to download.'));
+      if (!SECTIONS[mySection()]) { alert(T('🎓 Choisissez d\'abord votre section pour pouvoir télécharger.', '🎓 Choose your class first to be able to download.')); return; }
+      await ccStrike(T(`Ce document appartient à une autre section que la vôtre (${sectionLabel(mySection())}) : vous pouvez le lire en ligne, mais pas le télécharger.`,
+                       `This document belongs to another class than yours (${sectionLabel(mySection())}): you can read it online but not download it.`), name);
       return;
     }
 
@@ -3849,8 +3909,8 @@ function downloadPdf(id, name) {
       if (prev.exists) {
         ccDlMark(id); ccRefreshDlBtn(id, path);
         const dt = new Date(prev.data().ts || Date.now()).toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
-        alert(T(`✓ Vous avez déjà téléchargé ce document le ${dt}.\n\nUn seul téléchargement est autorisé par document : retrouvez-le dans les fichiers de votre téléphone.\nEn cas de perte, demandez au professeur de réinitialiser vos téléchargements.`,
-                `✓ You already downloaded this document on ${dt}.\n\nOnly one download per document is allowed: look for it in your phone's files.\nIf you lost it, ask the teacher to reset your downloads.`));
+        await ccStrike(T(`Vous avez déjà téléchargé ce document le ${dt}. Un seul téléchargement est autorisé : retrouvez-le dans les fichiers de votre téléphone (en cas de perte, demandez au professeur de réinitialiser vos téléchargements).`,
+                         `You already downloaded this document on ${dt}. Only one download is allowed: look for it in your phone's files (if lost, ask the teacher to reset your downloads).`), name);
         return;
       }
       if (!confirm(T(`Télécharger « ${name} » ?\n\n• Un SEUL téléchargement est autorisé : gardez bien le fichier sur votre téléphone.\n• Votre nom et un code personnel seront imprimés sur chaque page : la copie est strictement personnelle, toute copie transférée sera identifiée.`,
