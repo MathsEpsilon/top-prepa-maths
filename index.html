@@ -382,7 +382,19 @@
     .split-wrap.split #fileListCol { max-width:100%; }
     #previewPane { position:static; width:100%; }
     #previewFrame { height:62vh; }
+    #ccSafeView { height:62vh; }
   }
+  /* 🔐 Aperçu protégé (étudiants) : pages dessinées, sans bouton de téléchargement */
+  #ccSafeView { height:calc(100vh - 190px); overflow:auto; border:1px solid #cbd5e1; border-radius:12px; background:#e2e8f0; padding:12px;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  #ccSafeView canvas { display:block; margin:0 auto 12px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.15); max-width:100%; pointer-events:none; }
+  #ccSafeView .cc-sv-msg { text-align:center; padding:30px; color:#475569; font-weight:600; }
+  #previewPane:fullscreen #ccSafeView { height:calc(100vh - 70px); }
+  #previewPane.notes-open #ccSafeView { height:calc(100vh - 380px); }
+  body.pdf-dark #ccSafeView canvas { filter:invert(.9) hue-rotate(180deg); }
+  body.cc-safe #ccPvTab { display:none !important; }
+  .btn-dl.cc-dl-off  { background:#e2e8f0 !important; color:#475569 !important; }
+  .btn-dl.cc-dl-done { background:#dcfce7 !important; color:#166534 !important; }
 
   .sidebar-resizer {
     width:6px; background:#1d4ed8; cursor:col-resize; flex-shrink:0;
@@ -1064,6 +1076,7 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
                 <button class="tool-btn" onclick="closePreview()" data-i18n="closePrev">✕ Fermer</button>
               </div>
               <iframe id="previewFrame" title="Aperçu PDF"></iframe>
+              <div id="ccSafeView" style="display:none" oncontextmenu="return false"></div>
             </div>
           </div>
         </div>
@@ -1124,6 +1137,7 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
         <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="exportUsersCSV()" data-i18n="btnExportUsers">⬇ Exporter la liste (CSV)</button>
         <div id="stUsers"></div>
       </details>
+      <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="adminTraceCode()">🔎 Retrouver l'étudiant d'un PDF diffusé (code)</button>
       <h4>🏆 Top téléchargements</h4>
       <div id="stTop"></div>
       <h4 data-i18n="statViews">👁 Les plus consultés</h4>
@@ -2038,6 +2052,13 @@ function renderUsersList(snap) {
       delBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(doc.id); };
       actions.appendChild(delBtn);
 
+      const rstBtn = document.createElement('button');
+      rstBtn.className = 'btn-user-action btn-user-unblock';
+      rstBtn.textContent = lang === 'en' ? '↺ Downloads' : '↺ Téléchargements';
+      rstBtn.title = lang === 'en' ? 'Allow this student to download again' : 'Autoriser de nouveau cet étudiant à télécharger (téléphone perdu…)';
+      rstBtn.onclick = (e) => { e.stopPropagation(); adminResetDownloads(doc.id); };
+      actions.appendChild(rstBtn);
+
       row.appendChild(actions);
     }
 
@@ -2811,7 +2832,12 @@ function previewPdf(id, name) {
     if (!doc.exists) return;
     const data = doc.data();
     if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
-    try {
+    // 🔐 Étudiant : lecture seule (pages dessinées), sans le bouton « Télécharger » du lecteur PDF du navigateur
+    document.body.classList.toggle('cc-safe', !isRealAdmin());
+    if (!isRealAdmin()) {
+      ccRenderSafe(data.content);
+    } else try {
+      ccClearSafe();
       const parts = String(data.content).split(',');
       const bin = atob(parts[1]);
       const arr = new Uint8Array(bin.length);
@@ -2845,6 +2871,7 @@ function closePreview() {
   const fw = document.querySelector('.files-wrap'); if (fw) fw.classList.remove('wide');
   const fr = document.getElementById('previewFrame');
   if (fr) fr.removeAttribute('src');
+  ccClearSafe();
   if (window._prevUrl) { try { URL.revokeObjectURL(window._prevUrl); } catch(e) {} window._prevUrl = null; }
   document.querySelectorAll('#fileList .file-row').forEach(r => r.classList.remove('sel-row'));
 }
@@ -3036,6 +3063,8 @@ function renderFileRows(container, list, onMove) {
     const btnDl = document.createElement('button');
     btnDl.className = 'btn-dl'; btnDl.textContent = I18N.btnDl[lang];
     btnDl.onclick = (e) => { e.stopPropagation(); downloadPdf(f.id, f.name); };
+    btnDl.dataset.dl = f.id;
+    ccStyleDlBtn(btnDl, f.id, f.path);
 
     row.appendChild(ico); row.appendChild(info); row.appendChild(dl); row.appendChild(btnDl);
 
@@ -3692,29 +3721,238 @@ function startSubscription() {
    'inline-block' dans loginAs().
 ================================================= */
 
+/* =====================================================================
+   🔐 TÉLÉCHARGEMENT CONTRÔLÉ
+   1) Consultation libre de toutes les sections ; téléchargement réservé
+      aux documents de SA section (+ dossiers communs si DL_COMMUNS_POUR_TOUS).
+   2) Un seul téléchargement par étudiant et par document (collection « dlOnce »).
+   3) Copie personnalisée : nom, identifiant, section, date et code unique
+      imprimés sur chaque page → toute copie transférée est identifiable.
+   ===================================================================== */
+const DL_COMMUNS_POUR_TOUS = true;   // Divers, Bac, Licence : téléchargeables par toutes les sections
+
+function ccFolderOfPath(p) {
+  p = String(p || '');
+  if (p === 'licence__') return 'licence';
+  const f = ALL_FOLDER_IDS.find(fd => p.indexOf(fd + '_') === 0);
+  if (f) return f;
+  if (p.indexOf('divers_main') === 0) return 'divers_main';
+  return '';
+}
+function ccCanDownload(path) {
+  if (isAdminNow()) return true;
+  if (typeof currentUser === 'undefined' || !currentUser) return false;
+  const key = mySection(), sec = SECTIONS[key];
+  if (!sec) return false;                                   // section non choisie : pas de téléchargement
+  const f = ccFolderOfPath(path);
+  if (CLASS_FOLDERS.includes(f)) return sec.folders.includes(f);
+  if (COMMON_FOLDERS.includes(f)) return DL_COMMUNS_POUR_TOUS || key === 'autre';
+  return true;
+}
+
+/* Mémoire locale des téléchargements (pour l'affichage des boutons) */
+function ccDlKey() { return 'tpm_dlonce_' + ((currentUser && currentUser.username) || ''); }
+function ccDlLocal() { try { return JSON.parse(localStorage.getItem(ccDlKey()) || '{}'); } catch (e) { return {}; } }
+function ccDlMark(id) { try { const m = ccDlLocal(); m[id] = Date.now(); localStorage.setItem(ccDlKey(), JSON.stringify(m)); } catch (e) {} }
+function ccDlDocId(id) { return String(currentUser.username).replace(/\//g, '_') + '__' + id; }
+
+function ccStyleDlBtn(btn, id, path) {
+  btn.classList.remove('cc-dl-off', 'cc-dl-done');
+  if (!ccCanDownload(path)) {
+    btn.textContent = lang === 'en' ? '👁 Read only' : '👁 Consultation';
+    btn.title = lang === 'en' ? 'Another class: you can read it, not download it' : 'Autre section : lecture autorisée, téléchargement réservé';
+    btn.classList.add('cc-dl-off');
+  } else if (!isRealAdmin() && ccDlLocal()[id]) {
+    btn.textContent = lang === 'en' ? '✓ Downloaded' : '✓ Téléchargé';
+    btn.title = lang === 'en' ? 'Already downloaded (only once allowed)' : 'Déjà téléchargé (une seule fois autorisée)';
+    btn.classList.add('cc-dl-done');
+  }
+}
+function ccRefreshDlBtn(id, path) {
+  document.querySelectorAll('[data-dl="' + id + '"]').forEach(b => ccStyleDlBtn(b, id, path));
+}
+
+/* Outils PDF : pdf-lib (tatouage) et pdf.js (aperçu protégé) */
+let ccPdfLibP = null, ccPdfjsP = null;
+function ccLoadScript(src) {
+  return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+}
+function ccPdfLib() {
+  if (window.PDFLib) return Promise.resolve(window.PDFLib);
+  return ccPdfLibP || (ccPdfLibP = ccLoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js')
+    .then(() => window.PDFLib).catch(e => { ccPdfLibP = null; throw e; }));
+}
+function ccPdfjs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return ccPdfjsP || (ccPdfjsP = ccLoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(() => {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    return window.pdfjsLib;
+  }).catch(e => { ccPdfjsP = null; throw e; }));
+}
+function ccDataUriBytes(uri) {
+  const b = atob(String(uri).split(',')[1] || ''); const a = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+  return a;
+}
+// Les polices standard des PDF ne connaissent que l'alphabet latin : on retire accents et caractères spéciaux
+function ccLatin(x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '?'); }
+
+async function ccStampPdf(bytes, code) {
+  const L = await ccPdfLib();
+  const doc = await L.PDFDocument.load(bytes, { ignoreEncryption: true });
+  const fB = await doc.embedFont(L.StandardFonts.HelveticaBold);
+  const fR = await doc.embedFont(L.StandardFonts.Helvetica);
+  const who = ccLatin(`${currentUser.name || currentUser.username} (@${currentUser.username})`);
+  const d = new Date();
+  const quand = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const pied = ccLatin(`Copie personnelle de ${who} - ${sectionLabel(currentUser.section)} - ${quand} - code ${code} - Top Prepa Maths (Chniti Chokri) - diffusion interdite`);
+  doc.getPages().forEach(pg => {
+    const { width: w, height: h } = pg.getSize();
+    // filigrane diagonal au nom de l'étudiant
+    const size = Math.max(16, Math.min(w, h) / 16);
+    const tw = fB.widthOfTextAtSize(who, size), ang = Math.atan2(h, w);
+    pg.drawText(who, { x: w / 2 - Math.cos(ang) * tw / 2 + Math.sin(ang) * size / 3, y: h / 2 - Math.sin(ang) * tw / 2 - Math.cos(ang) * size / 3,
+      size, font: fB, color: L.rgb(0.75, 0.1, 0.1), opacity: 0.13, rotate: L.radians(ang) });
+    // bandeau en bas de page
+    let fs = 7; while (fs > 4 && fR.widthOfTextAtSize(pied, fs) > w - 20) fs -= 0.5;
+    pg.drawText(pied, { x: 10, y: 6, size: fs, font: fR, color: L.rgb(0.6, 0.1, 0.1), opacity: 0.9 });
+  });
+  doc.setAuthor('Chniti Chokri - IPEIN Nabeul - Top Prepa Maths');
+  doc.setSubject(ccLatin(`Copie personnelle de ${who} - code ${code}`));
+  doc.setKeywords(['TopPrepaMaths', code, ccLatin(currentUser.username)]);
+  return doc.save();
+}
+
 function downloadPdf(id, name) {
-  db.collection('files').doc(id).get().then(ccWithContent).then(doc => {
-    if(!doc.exists) return;
-    const data = doc.data();
-    if (!pathAllowed(data.path)) { showToast(I18N.errSectionLock[lang]); return; }
+  if (typeof currentUser === 'undefined' || !currentUser) return;
+  const T = (fr, en) => lang === 'en' ? en : fr;
+  const admin = isRealAdmin();
+  (async () => {
+    const meta = await db.collection('files').doc(id).get();
+    if (!meta.exists) return;
+    const path = meta.data().path;
+    if (!pathAllowed(path)) { showToast(I18N.errSectionLock[lang]); return; }
 
+    // 1) Section : lecture seule pour les autres sections
+    if (!ccCanDownload(path)) {
+      alert(SECTIONS[mySection()]
+        ? T(`👁 Consultation seule\n\nCe document appartient à une autre section que la vôtre (${sectionLabel(mySection())}).\nVous pouvez le lire en ligne, mais pas le télécharger.`,
+            `👁 Read only\n\nThis document belongs to another class than yours (${sectionLabel(mySection())}).\nYou can read it online but not download it.`)
+        : T('🎓 Choisissez d\'abord votre section pour pouvoir télécharger.', '🎓 Choose your class first to be able to download.'));
+      return;
+    }
+
+    // 2) Une seule fois
+    const ref = admin ? null : db.collection('dlOnce').doc(ccDlDocId(id));
+    if (ref) {
+      const prev = await ref.get();
+      if (prev.exists) {
+        ccDlMark(id); ccRefreshDlBtn(id, path);
+        const dt = new Date(prev.data().ts || Date.now()).toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
+        alert(T(`✓ Vous avez déjà téléchargé ce document le ${dt}.\n\nUn seul téléchargement est autorisé par document : retrouvez-le dans les fichiers de votre téléphone.\nEn cas de perte, demandez au professeur de réinitialiser vos téléchargements.`,
+                `✓ You already downloaded this document on ${dt}.\n\nOnly one download per document is allowed: look for it in your phone's files.\nIf you lost it, ask the teacher to reset your downloads.`));
+        return;
+      }
+      if (!confirm(T(`Télécharger « ${name} » ?\n\n• Un SEUL téléchargement est autorisé : gardez bien le fichier sur votre téléphone.\n• Votre nom et un code personnel seront imprimés sur chaque page : la copie est strictement personnelle, toute copie transférée sera identifiée.`,
+                     `Download "${name}"?\n\n• Only ONE download is allowed: keep the file on your phone.\n• Your name and a personal code will be printed on every page: this copy is strictly personal, any forwarded copy will be traced.`))) return;
+    }
+
+    showToast(T('⏳ Préparation de votre copie personnelle…', '⏳ Preparing your personal copy…'));
+    const full = await ccWithContent(meta);
+    const content = full.data().content;
+    if (!content) { showToast(T('Document vide ou indisponible.', 'Empty or unavailable document.')); return; }
+
+    const code = (Date.now().toString(36).slice(-3) + Math.random().toString(36).slice(2, 6)).toUpperCase();
+    let bytes;
+    try { bytes = await ccStampPdf(ccDataUriBytes(content), code); }
+    catch (e) {
+      console.error(e);
+      if (!admin) { alert(T('⚠️ Impossible de préparer la copie personnelle (connexion ?). Réessayez : votre droit de téléchargement n\'a pas été utilisé.', '⚠️ Could not prepare your personal copy (connection?). Try again: your download right was not used.')); return; }
+      bytes = ccDataUriBytes(content);   // admin : fichier d'origine
+    }
+
+    // On enregistre le téléchargement AVANT de donner le fichier (la règle Firestore interdit de le recréer)
+    if (ref) {
+      await ref.set({ u: currentUser.username, n: currentUser.name || '', s: currentUser.section || '', f: id, name, code, ts: Date.now() });
+      ccDlMark(id);
+    }
+
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
     const link = document.createElement('a');
-    link.href = data.content;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 
-    db.collection('files').doc(id).update({
-      downloads: firebase.firestore.FieldValue.increment(1)
-    }).catch(() => {});
-  }).catch(err => {
-    if (err.code === 'permission-denied') {
-      showToast("🔒 Ce chapitre n'est pas encore débloqué par l'admin.");
+    ccRefreshDlBtn(id, path);
+    if (!admin) showToast(T('✅ Copie personnelle téléchargée — code ' + code, '✅ Personal copy downloaded — code ' + code));
+    db.collection('files').doc(id).update({ downloads: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
+  })().catch(err => {
+    console.error(err);
+    if (err && err.code === 'permission-denied') {
+      showToast(admin ? '⚠️ Ajoutez la règle « dlOnce » dans Firestore.' : "🔒 Téléchargement refusé (déjà effectué ou non autorisé).");
     } else {
       showToast("Erreur, réessaie.");
     }
   });
+}
+
+/* Aperçu protégé : pages dessinées avec pdf.js (pas de bouton « Télécharger » ni « Enregistrer ») */
+let ccSafeTok = 0;
+async function ccRenderSafe(content) {
+  const box = document.getElementById('ccSafeView'), fr = document.getElementById('previewFrame');
+  if (!box) return;
+  if (fr) { fr.removeAttribute('src'); fr.style.display = 'none'; }
+  box.style.display = 'block';
+  const tok = ++ccSafeTok;
+  box.innerHTML = '<div class="cc-sv-msg">⏳ ' + (lang === 'en' ? 'Loading…' : 'Chargement…') + '</div>';
+  try {
+    const lib = await ccPdfjs();
+    const pdf = await lib.getDocument({ data: ccDataUriBytes(content) }).promise;
+    await new Promise(r => requestAnimationFrame(r));
+    if (tok !== ccSafeTok) return;
+    box.innerHTML = '';
+    const W = Math.max(260, box.clientWidth - 26);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      if (tok !== ccSafeTok) return;
+      const page = await pdf.getPage(i);
+      const scale = W / page.getViewport({ scale: 1 }).width;
+      const vp = page.getViewport({ scale: scale * dpr });
+      const c = document.createElement('canvas');
+      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height); c.style.width = W + 'px';
+      box.appendChild(c);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    }
+  } catch (e) {
+    console.error(e);
+    if (tok === ccSafeTok) box.innerHTML = '<div class="cc-sv-msg">⚠️ ' + (lang === 'en' ? 'Unable to display this document.' : 'Impossible d\'afficher ce document.') + '</div>';
+  }
+}
+function ccClearSafe() {
+  ccSafeTok++;
+  const b = document.getElementById('ccSafeView'); if (b) { b.innerHTML = ''; b.style.display = 'none'; }
+  const fr = document.getElementById('previewFrame'); if (fr) fr.style.display = '';
+}
+
+/* Admin : remettre à zéro les téléchargements d'un étudiant (téléphone perdu…) */
+function adminResetDownloads(username) {
+  if (!isRealAdmin()) return;
+  if (!confirm(`Autoriser ${username} à télécharger de nouveau tous les documents ?`)) return;
+  db.collection('dlOnce').where('u', '==', username).get()
+    .then(snap => { const b = db.batch(); snap.docs.forEach(d => b.delete(d.ref)); return b.commit().then(() => snap.size); })
+    .then(n => showToast(`↺ ${n} téléchargement(s) réinitialisé(s) pour ${username}`))
+    .catch(e => showToast(e.code === 'permission-denied' ? '⚠️ Ajoutez la règle « dlOnce » dans Firestore.' : '⚠️ ' + (e.message || e)));
+}
+/* Admin : retrouver l'étudiant à partir du code imprimé en bas d'un PDF qui circule */
+function adminTraceCode() {
+  if (!isRealAdmin()) return;
+  const code = prompt('Code imprimé en bas du PDF (après « code ») :');
+  if (!code) return;
+  db.collection('dlOnce').where('code', '==', code.trim().toUpperCase()).get().then(snap => {
+    if (snap.empty) { alert('Aucun téléchargement ne correspond à ce code.'); return; }
+    const d = snap.docs[0].data();
+    alert(`Ce PDF a été téléchargé par :\n\n👤 ${d.n || '—'} (@${d.u})\n🎓 ${sectionLabel(d.s)}\n📕 ${d.name}\n📅 ${new Date(d.ts).toLocaleString('fr-FR')}`);
+  }).catch(e => alert(e.code === 'permission-denied' ? 'Ajoutez la règle « dlOnce » dans Firestore.' : (e.message || e)));
 }
 
 function deletePdf(id) {
@@ -7407,7 +7645,7 @@ body.pg-noarrows .pg-arrow { display:none; }
     } catch (e) { console.error(e); toast('⚠️ ' + t('loadErr')); }
   }
   async function importSiteFile(id) {
-    try { const d = await ccWithContent(await db.collection('files').doc(id).get()); if (!d.exists || !pathAllowed(d.data().path)) return; UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
+    try { const d = await ccWithContent(await db.collection('files').doc(id).get()); if (!d.exists || !pathAllowed(d.data().path)) return; if (!ccCanDownload(d.data().path)) { toast(lang === 'en' ? '👁 Read only: this document belongs to another class.' : '👁 Consultation seule : ce document appartient à une autre section.'); return; } UI.closeAll(); await importPdfBytes(dataUriToBytes(d.data().content)); }
     catch (e) { onErr(e); toast('⚠️ ' + t('loadErr')); }
   }
   function sharePdf(id, name) {
