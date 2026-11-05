@@ -950,6 +950,10 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
             <option value="autre" data-i18n="secOther">Autre (Bac, Licence…)</option>
           </select>
         </div>
+        <div class="field">
+          <label data-i18n="lblClasse">🏫 Ma classe (obligatoire)</label>
+          <input type="text" id="suClasse" required placeholder="ex : PC1, MP2, SM1…" maxlength="20" autocomplete="off">
+        </div>
         <button class="btn-main" onclick="doSignup()" data-i18n="btnSignup">Créer mon compte</button>
       </div>
       <div id="confirmPanel" style="display:none; text-align:center">
@@ -1135,6 +1139,7 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
       <details id="stUsersDetails">
         <summary><span data-i18n="statUsersList">👥 Liste des inscrits</span> (<span id="stUsersCount">0</span>)</summary>
         <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="exportUsersCSV()" data-i18n="btnExportUsers">⬇ Exporter la liste (CSV)</button>
+        <button type="button" class="btn-join" style="margin:8px 0; background:#dc2626; color:#fff;" onclick="adminPurgeUsers()">🧹 Supprimer tous sauf Adel Gammoudi, Samir Saboui, Chaima Sboui</button>
         <div id="stUsers"></div>
       </details>
       <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="adminTraceCode()">🔎 Retrouver l'étudiant d'un PDF diffusé (code)</button>
@@ -1335,6 +1340,8 @@ const I18N = {
   phSection:      { fr:'Sélectionnez votre section', en:'Select your class' },
   secOther:       { fr:'Autre (Bac, Licence…)', en:'Other (Bac, Bachelor…)' },
   errSection:     { fr:'Veuillez choisir votre section', en:'Please choose your class' },
+  lblClasse:      { fr:'🏫 Ma classe (obligatoire)', en:'🏫 My group (required)' },
+  errClasse:      { fr:'Veuillez indiquer votre classe (ex : PC1, MP2)', en:'Please enter your group (e.g. PC1, MP2)' },
   errSectionLock: { fr:"🔒 Ce dossier est réservé à une autre section.", en:'🔒 This folder is reserved for another class.' },
   errRegionCity:  { fr:'Veuillez sélectionner votre région et votre ville', en:'Please select your region and city' },
   errUserTaken:   { fr:'Cet identifiant est déjà pris', en:'This username is already taken' },
@@ -1847,11 +1854,13 @@ function doSignup() {
   const region = document.getElementById('suRegion').value.trim();
   const city = document.getElementById('suCity').value.trim();
   const section = document.getElementById('suSection').value;
+  const classe = document.getElementById('suClasse').value.trim().toUpperCase().replace(/\s+/g, '');
   const msg = document.getElementById('authMsg');
 
   if(!name || !user || !email) { showMsg(msg, I18N.errFillAll[lang], true); return; }
   if(!region || !city) { showMsg(msg, I18N.errRegionCity[lang], true); return; }
   if(!SECTIONS[section]) { showMsg(msg, I18N.errSection[lang], true); return; }
+  if(!classe || classe.length < 2) { showMsg(msg, I18N.errClasse[lang], true); return; }
 
   db.collection('users').doc(user).get().then(doc => {
     if(doc.exists) { showMsg(msg, I18N.errUserTaken[lang], true); return; }
@@ -1876,6 +1885,7 @@ function doSignup() {
       role: 'student',
       group: studentGroup,
       section: section,
+      classe: classe,
       approved: false,  // ✅ Compte en attente d'approbation
       status: 'pending',  // ✅ État : 'pending', 'approved', 'blocked'
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2032,7 +2042,7 @@ function renderUsersList(snap) {
     row.className = 'top-item user-row';
     row.title = u.email || '';
     const blockedTag = u.blocked ? `<span class="user-blocked-tag">${I18N.tagBlocked[lang]}</span>` : '';
-    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>` +
+    row.innerHTML = `<div class="row-top"><span>${u.name || doc.id} ${blockedTag}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}${u.classe ? ' · 🏫 ' + String(u.classe).replace(/</g, '&lt;') : ''}</div>` +
       (u.strikes ? `<div class="row-loc" style="color:#c2410c; font-weight:700;">⚠️ ${u.strikes} tentative(s) de téléchargement interdite(s)${u.lastStrike && u.lastStrike.doc ? ' — dernière : ' + String(u.lastStrike.doc).replace(/</g, '&lt;') : ''}</div>` : '') +
       (u.blocked && u.blockedReason ? `<div class="row-loc" style="color:#b91c1c;">⛔ ${String(u.blockedReason).replace(/</g, '&lt;')}</div>` : '');
     if (currentUser && currentUser.role === 'admin') row.appendChild(sectionPicker(doc.id, u.section));
@@ -2087,7 +2097,7 @@ function renderPendingApproval(snap) {
     const row = document.createElement('div');
     row.className = 'top-item user-row';
     row.title = u.email || '';
-    row.innerHTML = `<div class="row-top"><span style="color:#b45309; font-weight:700;">⏳ ${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}</div>`;
+    row.innerHTML = `<div class="row-top"><span style="color:#b45309; font-weight:700;">⏳ ${u.name || doc.id}</span><span class="tn">${doc.id}</span></div><div class="row-loc">📍 ${loc}</div><div class="row-loc">🎓 ${sectionLabel(u.section)}${u.classe ? ' · 🏫 ' + String(u.classe).replace(/</g, '&lt;') : ''}</div>`;
     if (currentUser && currentUser.role === 'admin') row.appendChild(sectionPicker(doc.id, u.section));
 
     /* --- Actions admin : Approuver / Rejeter --- */
@@ -2127,7 +2137,7 @@ function exportUsersCSV() {
     return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
 
-  const headers = ['Nom', 'Identifiant', 'Email', 'Région', 'Ville', 'Groupe', 'Section', 'Bloqué'];
+  const headers = ['Nom', 'Identifiant', 'Email', 'Région', 'Ville', 'Groupe', 'Section', 'Classe', 'Bloqué'];
   const rows = [headers.join(';')];
 
   snap.docs
@@ -2143,6 +2153,7 @@ function exportUsersCSV() {
         escCsv(u.city),
         escCsv(u.group === 'saudi' ? 'Saoudien(ne)' : 'Préparatoire'),
         escCsv(sectionLabel(u.section)),
+        escCsv(u.classe || ''),
         escCsv(u.blocked ? 'Oui' : 'Non')
       ].join(';'));
     });
@@ -2226,7 +2237,9 @@ function renderSectionBars(elId, people) {
 
 /* ✅ Étudiant inscrit avant cette mise à jour : il choisit sa section une seule fois */
 function askSectionIfMissing() {
-  if (!currentUser || currentUser.role === 'admin' || SECTIONS[currentUser.section]) return;
+  if (!currentUser || currentUser.role === 'admin') return;
+  if (SECTIONS[currentUser.section] && !currentUser.classe) { askClasseIfMissing(); return; }
+  if (SECTIONS[currentUser.section]) return;
   if (document.getElementById('secAsk')) return;
   const box = document.createElement('div');
   box.id = 'secAsk';
@@ -2240,12 +2253,75 @@ function askSectionIfMissing() {
   box.querySelectorAll('button[data-sec]').forEach(b => b.onclick = () => {
     const sec = b.dataset.sec;
     if (!confirm((lang === 'en' ? 'Confirm: ' : 'Confirmer : ') + SECTIONS[sec].label + ' ?')) return;
-    db.collection('users').doc(currentUser.username).update({ section: sec }).then(() => {
-      currentUser.section = sec;
+    let cl = currentUser.classe || '';
+    while (!cl) {
+      cl = String(prompt(I18N.errClasse[lang], '') || '').trim().toUpperCase().replace(/\s+/g, '');
+      if (cl.length < 2) cl = '';
+    }
+    db.collection('users').doc(currentUser.username).update({ section: sec, classe: cl }).then(() => {
+      currentUser.section = sec; currentUser.classe = cl;
       localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
       location.reload();
     }).catch(err => alert(`Erreur : ${err.message || err}`));
   });
+}
+
+/* ✅ Compte existant sans classe : saisie obligatoire (fenêtre non fermable) */
+function askClasseIfMissing() {
+  if (!currentUser || currentUser.role === 'admin' || currentUser.classe) return;
+  if (document.getElementById('classeAsk')) return;
+  const box = document.createElement('div');
+  box.id = 'classeAsk';
+  box.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(15,23,42,.6); display:flex; align-items:center; justify-content:center; padding:20px;';
+  box.innerHTML = `<div style="background:#fff; color:#0f172a; border-radius:18px; padding:26px; max-width:440px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,.35); font-family:inherit;">
+    <h3 style="margin:0 0 8px; color:#0f2a5c;">🏫 ${lang === 'en' ? 'Enter your group' : 'Indiquez votre classe'}</h3>
+    <p style="margin:0 0 12px; font-size:14px; color:#475569;">${lang === 'en' ? 'Required to continue.' : 'Obligatoire pour continuer.'} (${sectionLabel(currentUser.section)})</p>
+    <input id="classeAskIn" type="text" maxlength="20" placeholder="ex : PC1, MP2, SM1…" style="width:100%; padding:12px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; margin-bottom:12px;">
+    <button id="classeAskOk" style="display:block; width:100%; padding:12px; border:none; border-radius:12px; cursor:pointer; font-size:15px; font-weight:700; color:#fff; background:linear-gradient(135deg,#1d4ed8,#7c3aed);">${lang === 'en' ? 'Save' : 'Enregistrer'}</button>
+  </div>`;
+  document.body.appendChild(box);
+  document.getElementById('classeAskOk').onclick = () => {
+    const cl = document.getElementById('classeAskIn').value.trim().toUpperCase().replace(/\s+/g, '');
+    if (cl.length < 2) { alert(I18N.errClasse[lang]); return; }
+    db.collection('users').doc(currentUser.username).update({ classe: cl }).then(() => {
+      currentUser.classe = cl;
+      localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
+      box.remove();
+      showToast('🏫 ' + cl);
+    }).catch(err => alert(`Erreur : ${err.message || err}`));
+  };
+}
+
+/* 🧹 Admin : supprimer tous les inscrits SAUF la liste à conserver */
+const CC_GARDER = [['adel', 'gammoudi'], ['samir', 'saboui'], ['chaima', 'sboui']];
+function ccNorm(x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+function ccAGarder(id, u) {
+  if (u.role === 'admin') return true;
+  const t = ccNorm((u.name || '') + ' ' + id + ' ' + (u.email || '').split('@')[0]);
+  return CC_GARDER.some(mots => mots.every(m => t.includes(m)));
+}
+async function adminPurgeUsers() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const snap = await db.collection('users').get();
+  const garder = [], suppr = [];
+  snap.docs.forEach(d => (ccAGarder(d.id, d.data()) ? garder : suppr).push(d));
+  const nomsG = garder.filter(d => d.data().role !== 'admin').map(d => '  ✅ ' + (d.data().name || d.id) + ' (@' + d.id + ')').join('\n') || '  (aucun trouvé !)';
+  if (!suppr.length) { alert('Rien à supprimer.\nConservés :\n' + nomsG); return; }
+  if (!confirm(`🧹 ${suppr.length} compte(s) seront SUPPRIMÉS définitivement.\n\nConservés :\n${nomsG}\n\nContinuer ?`)) return;
+  if (prompt('Tapez SUPPRIMER pour confirmer') !== 'SUPPRIMER') return;
+  let ok = 0, ko = 0;
+  for (let i = 0; i < suppr.length; i += 150) {
+    const batch = db.batch();
+    suppr.slice(i, i + 150).forEach(d => {
+      batch.delete(db.collection('users').doc(d.id));
+      batch.delete(db.collection('presence').doc(d.id));
+    });
+    try { await batch.commit(); ok += Math.min(150, suppr.length - i); } catch (e) { console.error(e); ko += Math.min(150, suppr.length - i); }
+  }
+  // index e-mail des comptes supprimés (si les règles le permettent)
+  suppr.forEach(d => { const em = d.data().email; if (em) db.collection('emailIndex').doc(String(em).toLowerCase()).delete().catch(() => {}); });
+  db.collection('stats').doc('public').set({ totalUsers: garder.length }, { merge: true }).catch(() => {});
+  alert(`✅ ${ok} compte(s) supprimé(s)` + (ko ? `\n❌ ${ko} échec(s) — voir la console` : '') + `\nRestent : ${garder.length} (admin compris)`);
 }
 
 /* ✅ Approuver un compte en attente */
@@ -3869,11 +3945,7 @@ async function ccStampPdf(bytes, code) {
   const pied = ccLatin(`Copie personnelle de ${who} - ${sectionLabel(currentUser.section)} - ${quand} - code ${code} - Top Prepa Maths (Chniti Chokri) - diffusion interdite`);
   doc.getPages().forEach(pg => {
     const { width: w, height: h } = pg.getSize();
-    // filigrane diagonal au nom de l'étudiant
-    const size = Math.max(16, Math.min(w, h) / 16);
-    const tw = fB.widthOfTextAtSize(who, size), ang = Math.atan2(h, w);
-    pg.drawText(who, { x: w / 2 - Math.cos(ang) * tw / 2 + Math.sin(ang) * size / 3, y: h / 2 - Math.sin(ang) * tw / 2 - Math.cos(ang) * size / 3,
-      size, font: fB, color: L.rgb(0.75, 0.1, 0.1), opacity: 0.13, rotate: L.radians(ang) });
+    // (filigrane diagonal au nom de l'étudiant supprimé)
     // bandeau en bas de page
     let fs = 7; while (fs > 4 && fR.widthOfTextAtSize(pied, fs) > w - 20) fs -= 0.5;
     pg.drawText(pied, { x: 10, y: 6, size: fs, font: fR, color: L.rgb(0.6, 0.1, 0.1), opacity: 0.9 });
