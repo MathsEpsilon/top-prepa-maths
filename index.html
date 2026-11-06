@@ -1139,7 +1139,6 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
       <details id="stUsersDetails">
         <summary><span data-i18n="statUsersList">👥 Liste des inscrits</span> (<span id="stUsersCount">0</span>)</summary>
         <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="exportUsersCSV()" data-i18n="btnExportUsers">⬇ Exporter la liste (CSV)</button>
-        <button type="button" class="btn-join" style="margin:8px 0; background:#dc2626; color:#fff;" onclick="adminPurgeUsers()">🧹 Supprimer tous sauf Adel Gammoudi, Samir Saboui, Chaima Sboui</button>
         <div id="stUsers"></div>
       </details>
       <button type="button" class="btn-join btn-meet" style="margin:8px 0" onclick="adminTraceCode()">🔎 Retrouver l'étudiant d'un PDF diffusé (code)</button>
@@ -2290,38 +2289,6 @@ function askClasseIfMissing() {
       showToast('🏫 ' + cl);
     }).catch(err => alert(`Erreur : ${err.message || err}`));
   };
-}
-
-/* 🧹 Admin : supprimer tous les inscrits SAUF la liste à conserver */
-const CC_GARDER = [['adel', 'gammoudi'], ['samir', 'saboui'], ['chaima', 'sboui']];
-function ccNorm(x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
-function ccAGarder(id, u) {
-  if (u.role === 'admin') return true;
-  const t = ccNorm((u.name || '') + ' ' + id + ' ' + (u.email || '').split('@')[0]);
-  return CC_GARDER.some(mots => mots.every(m => t.includes(m)));
-}
-async function adminPurgeUsers() {
-  if (!currentUser || currentUser.role !== 'admin') return;
-  const snap = await db.collection('users').get();
-  const garder = [], suppr = [];
-  snap.docs.forEach(d => (ccAGarder(d.id, d.data()) ? garder : suppr).push(d));
-  const nomsG = garder.filter(d => d.data().role !== 'admin').map(d => '  ✅ ' + (d.data().name || d.id) + ' (@' + d.id + ')').join('\n') || '  (aucun trouvé !)';
-  if (!suppr.length) { alert('Rien à supprimer.\nConservés :\n' + nomsG); return; }
-  if (!confirm(`🧹 ${suppr.length} compte(s) seront SUPPRIMÉS définitivement.\n\nConservés :\n${nomsG}\n\nContinuer ?`)) return;
-  if (prompt('Tapez SUPPRIMER pour confirmer') !== 'SUPPRIMER') return;
-  let ok = 0, ko = 0;
-  for (let i = 0; i < suppr.length; i += 150) {
-    const batch = db.batch();
-    suppr.slice(i, i + 150).forEach(d => {
-      batch.delete(db.collection('users').doc(d.id));
-      batch.delete(db.collection('presence').doc(d.id));
-    });
-    try { await batch.commit(); ok += Math.min(150, suppr.length - i); } catch (e) { console.error(e); ko += Math.min(150, suppr.length - i); }
-  }
-  // index e-mail des comptes supprimés (si les règles le permettent)
-  suppr.forEach(d => { const em = d.data().email; if (em) db.collection('emailIndex').doc(String(em).toLowerCase()).delete().catch(() => {}); });
-  db.collection('stats').doc('public').set({ totalUsers: garder.length }, { merge: true }).catch(() => {});
-  alert(`✅ ${ok} compte(s) supprimé(s)` + (ko ? `\n❌ ${ko} échec(s) — voir la console` : '') + `\nRestent : ${garder.length} (admin compris)`);
 }
 
 /* ✅ Approuver un compte en attente */
