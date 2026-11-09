@@ -4041,6 +4041,7 @@ function downloadPdf(id, name) {
   if (typeof currentUser === 'undefined' || !currentUser) return;
   const T = (fr, en) => lang === 'en' ? en : fr;
   const admin = isRealAdmin();
+  let etape = 'files';
   (async () => {
     const meta = await db.collection('files').doc(id).get();
     if (!meta.exists) return;
@@ -4060,13 +4061,16 @@ function downloadPdf(id, name) {
                              `Download "${name}"?\n\nYour name will be printed at the bottom of every page: this copy is strictly personal.`))) return;
 
     showToast(T('⏳ Préparation de votre copie personnelle…', '⏳ Preparing your personal copy…'));
+    etape = 'fileData';
     const full = await ccWithContent(meta);
+    etape = '';
     const content = full.data().content;
     if (!content) { showToast(T('Document vide ou indisponible.', 'Empty or unavailable document.')); return; }
 
     const code = (Date.now().toString(36).slice(-3) + Math.random().toString(36).slice(2, 6)).toUpperCase();
     let bytes;
-    try { bytes = await ccStampPdf(ccDataUriBytes(content), code); }
+    if (admin) bytes = ccDataUriBytes(content);            // admin : fichier d'origine, sans nom en bas
+    else try { bytes = await ccStampPdf(ccDataUriBytes(content), code); }
     catch (e) {
       console.error(e);
       if (!admin) { alert(T('⚠️ Impossible de préparer la copie personnelle (connexion ?). Réessayez.', '⚠️ Could not prepare your personal copy (connection?). Please try again.')); return; }
@@ -4091,9 +4095,11 @@ function downloadPdf(id, name) {
     if (!admin) showToast(T('✅ Copie personnelle téléchargée — code ' + code, '✅ Personal copy downloaded — code ' + code));
     db.collection('files').doc(id).update({ downloads: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
   })().catch(err => {
-    console.error(err);
+    console.error('Téléchargement :', err);
     if (err && err.code === 'permission-denied') {
-      showToast(admin ? '⚠️ Ajoutez la règle « dlOnce » dans Firestore.' : "🔒 Téléchargement refusé (document d'une autre section).");
+      alert(admin
+        ? `⚠️ Firestore refuse la lecture (collection « ${etape || 'fileData'} »).\n\nMettez à jour les règles Firestore (console Firebase → Firestore → Règles) : la collection doit avoir « allow read: if true; ».`
+        : "🔒 Téléchargement momentanément indisponible (accès refusé par la base). Prévenez le professeur.");
     } else {
       showToast("Erreur, réessaie.");
     }
