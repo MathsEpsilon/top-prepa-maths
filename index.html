@@ -1226,9 +1226,26 @@ function ccWithContent(doc) {
 }
 function ccAddFile(obj) {
   const content = obj.content, meta = Object.assign({}, obj); delete meta.content;
+  if (!firebase.auth().currentUser) {
+    const e = new Error('Session administrateur expirée'); e.code = 'no-auth'; return Promise.reject(e);
+  }
   const ref = db.collection('files').doc();
   // le contenu d'abord, puis la fiche : un document listé a toujours son PDF
-  return db.collection('fileData').doc(ref.id).set({ content }).then(() => ref.set(meta)).then(() => ref);
+  return db.collection('fileData').doc(ref.id).set({ content })
+    .catch(e => { e.etape = 'fileData'; throw e; })
+    .then(() => ref.set(meta).catch(e => { e.etape = 'files'; ccDeleteFileData(ref.id); throw e; }))
+    .then(() => ref);
+}
+function ccAddFileErr(fname, err) {
+  const email = (firebase.auth().currentUser || {}).email || '';
+  if (err && err.code === 'no-auth')
+    return `Échec de l'ajout de « ${fname} » :\n\n🔐 Votre session administrateur a expiré (Firebase ne vous reconnaît plus comme admin).\n\n➡ Cliquez sur « Déconnexion », puis reconnectez-vous avec votre ADRESSE EMAIL et votre mot de passe.`;
+  if (err && err.code === 'permission-denied')
+    return `Échec de l'ajout de « ${fname} » : permission refusée par Firestore.\n\n` +
+      `• Compte connecté : ${email || 'aucun'}\n` +
+      `• Étape refusée : « ${err.etape || '?'} »\n\n` +
+      `➡ Vérifiez dans la console Firebase (Firestore → Règles) que la collection « ${err.etape || 'files / fileData'} » autorise l'écriture par l'administrateur (isAdmin).`;
+  return `Échec de l'ajout de « ${fname} » : ${(err && err.message) || err}`;
 }
 function ccDeleteFileData(id) { return db.collection('fileData').doc(id).delete().catch(() => {}); }
 let ccMigrating = false;
@@ -1646,7 +1663,19 @@ function checkSession() {
         loginAs(u);
       }).catch(() => loginAs(u));
     } else {
-      loginAs(u);
+      // ✅ Admin : la session locale ne suffit pas, les règles Firestore exigent
+      // une vraie connexion Firebase Auth. Si elle a expiré, on redemande l'email.
+      const unsubAdm = firebase.auth().onAuthStateChanged(fbUser => {
+        unsubAdm();
+        if (fbUser) { loginAs(u); return; }
+        localStorage.removeItem('cc_user_session');
+        document.getElementById('authScreen').style.display = 'flex';
+        document.getElementById('appScreen').style.display = 'none';
+        const msg = document.getElementById('authMsg');
+        if (msg) showMsg(msg, lang === 'en'
+          ? '🔐 Admin session expired: sign in again with your email address and password.'
+          : '🔐 Session administrateur expirée : reconnectez-vous avec votre adresse email et votre mot de passe.', true);
+      });
     }
   } else {
     document.getElementById('authScreen').style.display = 'flex';
@@ -3773,7 +3802,8 @@ function addPdfsRaw(filesList, names) {
         loadFiles();
       }).catch(err => {
         console.error('Échec de l\'ajout du fichier :', err);
-        alert(`Échec de l'ajout de « ${fname} » : ${err.message || err}`);
+        alert(ccAddFileErr(fname, err));
+        if (err && err.code === 'no-auth') logout();
       });
     };
     reader.onerror = function() {
