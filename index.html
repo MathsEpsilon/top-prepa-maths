@@ -935,7 +935,7 @@ kbd.k { font-family:'Manrope',sans-serif; font-size:11px; font-weight:700; paddi
         </div>
         <div class="field">
           <label data-i18n="lblCity">Ville (optionnel)</label>
-          <select id="suCity" required style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; background:#fff;">
+          <select id="suCity" style="width:100%; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:15px; background:#fff;">
             <option value="" data-i18n="phCity">Sélectionnez votre ville</option>
           </select>
         </div>
@@ -1642,6 +1642,7 @@ function checkSession() {
         }
         u.section = doc.data().section || '';
         u.group = doc.data().group || u.group;
+        u.classe = doc.data().classe || u.classe || '';
         loginAs(u);
       }).catch(() => loginAs(u));
     } else {
@@ -1741,7 +1742,7 @@ function adminHash(s) {
 }
 
 function doLogin() {
-  const userOrEmail = document.getElementById('loginUser').value.trim().toLowerCase();
+  const userOrEmail = document.getElementById('loginUser').value.trim().toLowerCase().replace(/^@/, '').replace(/\s+/g, '');
   const pass = document.getElementById('loginPass').value.trim();
   const msg = document.getElementById('authMsg');
 
@@ -1790,19 +1791,24 @@ function continueAsStudentLogin(userOrEmail, pass, msg, isEmailLogin) {
   findUserDoc.then(doc => {
     if (!doc || !doc.exists) { showMsg(msg, I18N.errUserNotFound[lang], true); return; }
     verifyPassword(doc.data(), pass, msg);
-  }).catch(() => showMsg(msg, I18N.errLoginConn[lang], true));
+  }).catch(err => {
+    console.error('Connexion étudiant impossible :', err);
+    const t = String((err && (err.code || err.message)) || '');
+    showMsg(msg, t.includes('permission') ? "❌ Lecture du compte refusée par la base (règles Firestore). Prévenez le professeur." : I18N.errLoginConn[lang], true);
+  });
 }
 
 function verifyPassword(user, pass, msgEl) {
   if (user.blocked) { showMsg(msgEl, I18N.errBlocked[lang], true); return; }
   
   // ✅ Vérifier si le compte est approuvé par l'admin
-  if (!user.approved) { 
+  if (user.approved === false) {   // ✅ seuls les comptes explicitement EN ATTENTE sont refusés (les anciens comptes sans ce champ passent)
     showMsg(msgEl, '⏳ Votre compte est en attente d\'approbation par l\'administrateur. Veuillez réessayer plus tard.', true); 
     return; 
   }
   
-  if(user.password === pass) {
+  const norm = x => String(x || '').replace(/\s+/g, '').toLowerCase();
+  if(user.password === pass || (user.password && norm(user.password) === norm(pass))) {   // ✅ « CC1234 », « cc 1234 » acceptés
     logConnection(user);
     // ✅ Auto-réparation : garantit que emailIndex existe pour les comptes
     // créés avant cette mise à jour, sans action requise de l'étudiant.
@@ -1820,6 +1826,7 @@ function verifyPassword(user, pass, msgEl) {
       role: user.role,
       group: user.group,
       section: user.section || '',
+      classe: user.classe || (function(){ try { const pc = JSON.parse(localStorage.getItem('cc_pending_classe') || 'null'); return pc && pc.u === user.username ? pc.c : ''; } catch (e) { return ''; } })(),
       subscription: user.subscription || null
     };
     loginAs(fullUser);
@@ -1848,7 +1855,9 @@ function updateCities() {
 
 function doSignup() {
   const name = document.getElementById('suName').value.trim();
-  const user = document.getElementById('suUser').value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+  // ✅ « Amîne.Ben » → « amine.ben » (les accents ne font plus disparaître de lettres)
+  const user = document.getElementById('suUser').value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                 .toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, '');
   const email = document.getElementById('suEmail').value.trim().toLowerCase();
   const region = document.getElementById('suRegion').value.trim();
   const city = document.getElementById('suCity').value.trim();
@@ -1856,66 +1865,102 @@ function doSignup() {
   const classe = document.getElementById('suClasse').value.trim().toUpperCase().replace(/\s+/g, '');
   const msg = document.getElementById('authMsg');
 
-  if(!name || !user || !email) { showMsg(msg, I18N.errFillAll[lang], true); return; }
-  if(!region || !city) { showMsg(msg, I18N.errRegionCity[lang], true); return; }
+  if(!name || !email) { showMsg(msg, I18N.errFillAll[lang], true); return; }
+  if(!user || user.length < 3) { showMsg(msg, "❌ Identifiant invalide : au moins 3 caractères, lettres latines, chiffres, point ou tiret (ex : ahmed.karray).", true); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) { showMsg(msg, "❌ Adresse e-mail invalide (ex : prenom.nom@gmail.com).", true); return; }
+  if(!region) { showMsg(msg, I18N.errRegionCity[lang], true); return; }   // ✅ ville facultative (comme indiqué sur le formulaire)
   if(!SECTIONS[section]) { showMsg(msg, I18N.errSection[lang], true); return; }
   if(!classe || classe.length < 2) { showMsg(msg, I18N.errClasse[lang], true); return; }
 
-  db.collection('users').doc(user).get().then(doc => {
-    if(doc.exists) { showMsg(msg, I18N.errUserTaken[lang], true); return; }
+  const btn = document.querySelector('#signupForm .btn-main');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+  const done = () => { if (btn) { btn.disabled = false; btn.style.opacity = ''; } };
+  showMsg(msg, '⏳ Création du compte…', false);
 
-    // Génération automatique du mot de passe démarrant par "cc"
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    const generatedPassword = "cc" + rand;
+  ccSignupAsync(name, user, email, region, city, section, classe, msg).finally(done);
+}
 
-    // ✅ Demander à quel groupe appartient l'étudiant
-    const groupChoice = prompt(I18N.groupPromptQ[lang], '1');
-    const groupMap = { '1': 'prepa', '2': 'saudi' };
-    const studentGroup = groupMap[groupChoice] || 'prepa';
+/* ✅ CORRECTIF INSCRIPTION
+   - plus de fenêtre prompt() (bloquée dans les navigateurs intégrés de
+     WhatsApp / Facebook / Instagram) : le groupe se déduit de la région ;
+   - e-mail déjà utilisé → message clair au lieu d'un refus Firestore ;
+   - e-mail « orphelin » (compte supprimé) → l'inscription passe quand même ;
+   - si les règles Firestore refusent le champ « classe » (règles pas encore
+     mises à jour), on réessaie sans ce champ : l'étudiant peut s'inscrire. */
+async function ccSignupAsync(name, user, email, region, city, section, classe, msg) {
+  try {
+    const exist = await db.collection('users').doc(user).get();
+    if (exist.exists) { showMsg(msg, I18N.errUserTaken[lang], true); return; }
 
+    let writeIndex = true;
+    try {
+      const idx = await db.collection('emailIndex').doc(email).get();
+      if (idx.exists) {
+        const owner = idx.data().username;
+        const ownerDoc = owner ? await db.collection('users').doc(owner).get() : null;
+        if (ownerDoc && ownerDoc.exists) {
+          showMsg(msg, `❌ Cet e-mail est déjà utilisé par le compte « ${owner} ». Connectez-vous avec cet identifiant (ou demandez au professeur).`, true);
+          return;
+        }
+        writeIndex = false;   // index orphelin : seul l'admin peut le nettoyer
+      }
+    } catch (e) { /* lecture impossible : on tente quand même */ }
+
+    const generatedPassword = 'cc' + Math.floor(1000 + Math.random() * 9000);
     const newUser = {
-      name: name,
-      username: user,
-      searchKey: user,
-      email: email,
-      region: region || '',
-      city: city || '',
-      password: generatedPassword,
-      role: 'student',
-      group: studentGroup,
-      section: section,
-      classe: classe,
-      approved: false,  // ✅ Compte en attente d'approbation
-      status: 'pending',  // ✅ État : 'pending', 'approved', 'blocked'
+      name: name, username: user, searchKey: user, email: email,
+      region: region || '', city: city || '',
+      password: generatedPassword, role: 'student',
+      group: region === 'Arabie Saoudite' ? 'saudi' : 'prepa',
+      section: section, classe: classe,
+      approved: false, status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    // ✅ Écriture groupée : le compte, son entrée dans l'index email
-    // (email → identifiant, sans donnée personnelle), et le compteur public
-    // (juste un nombre, jamais de nom) sont mis à jour ensemble.
-    const batch = db.batch();
-    batch.set(db.collection('users').doc(user), newUser);
-    batch.set(db.collection('emailIndex').doc(email), { username: user });
-    batch.set(db.collection('stats').doc('public'), { totalUsers: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-    batch.commit().then(() => {
-      document.getElementById('genPass').innerText = generatedPassword;
-      document.getElementById('signupForm').style.display = 'none';
-      document.getElementById('confirmPanel').style.display = 'block';
-    }).catch(err => {
-      console.error('❌ Erreur création compte :', err);
-      const errMsg = err.message || String(err);
-      if (errMsg.includes('permission-denied')) {
-        showMsg(msg, '❌ Erreur Firestore : permissions insuffisantes. Contactez l\'admin.', true);
-      } else if (errMsg.includes('already-exists')) {
-        showMsg(msg, '❌ Cet utilisateur existe déjà.', true);
-      } else {
-        showMsg(msg, `❌ Erreur : ${errMsg}`, true);
+    const attempt = (data, withIndex, withStats) => {
+      const b = db.batch();
+      b.set(db.collection('users').doc(user), data);
+      if (withIndex) b.set(db.collection('emailIndex').doc(email), { username: user });
+      if (withStats) b.set(db.collection('stats').doc('public'), { totalUsers: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+      return b.commit();
+    };
+    const noClasse = Object.assign({}, newUser); delete noClasse.classe;
+    const tries = [
+      [newUser, writeIndex, true],
+      [noClasse, writeIndex, true],     // règles anciennes (sans « classe »)
+      [noClasse, false, false]          // dernier recours : le compte seul
+    ];
+    let lastErr = null, ok = false;
+    for (const [d, wi, ws] of tries) {
+      try { await attempt(d, wi, ws); ok = true; break; }
+      catch (err) {
+        lastErr = err;
+        console.warn('Inscription : tentative refusée →', err && err.code, err && err.message);
+        if (!String((err && (err.code || err.message)) || '').includes('permission')) break;
       }
-    });
-  }).catch(err => {
-    console.error('❌ Erreur lors de la vérification utilisateur :', err);
-    showMsg(msg, `❌ Erreur de vérification : ${err.message || err}`, true);
-  });
+    }
+    if (!ok) throw lastErr;
+
+    try { localStorage.setItem('cc_pending_classe', JSON.stringify({ u: user, c: classe })); } catch (e) {}
+    document.getElementById('genPass').innerText = generatedPassword;
+    const lu = document.getElementById('loginUser'); if (lu) lu.value = user;
+    let note = document.getElementById('ccApproveNote');
+    if (!note) {
+      note = document.createElement('p'); note.id = 'ccApproveNote';
+      note.style.cssText = 'font-size:13px; color:#b45309; background:#fef3c7; border-radius:10px; padding:8px 10px; margin:0 0 12px;';
+      document.getElementById('genPass').insertAdjacentElement('afterend', note);
+    }
+    note.innerHTML = `Votre identifiant : <b>${user}</b><br>⏳ Votre compte doit être <b>approuvé par le professeur</b> avant la première connexion.`;
+    document.getElementById('signupForm').style.display = 'none';
+    document.getElementById('confirmPanel').style.display = 'block';
+    msg.innerText = '';
+  } catch (err) {
+    console.error('❌ Erreur création compte :', err);
+    const t = String((err && (err.code || err.message)) || err);
+    if (t.includes('permission')) showMsg(msg, "❌ Inscription refusée par la base (règles Firestore). Prévenez le professeur.", true);
+    else if (t.includes('unavailable') || t.includes('network') || t.includes('offline')) showMsg(msg, "❌ Pas de connexion Internet. Réessayez.", true);
+    else showMsg(msg, `❌ Erreur : ${(err && err.message) || err}`, true);
+  }
 }
 
 function afterConfirm() {
@@ -1938,59 +1983,47 @@ function switchToLogin() {
 }
 
 function doForgotPassword() {
-  const userInput = document.getElementById('forgotUser').value.trim().toLowerCase();
+  /* ✅ La réinitialisation libre permettait de voler n'importe quel compte et
+     elle est refusée par les règles Firestore. C'est désormais le professeur
+     qui génère un nouveau mot de passe (bouton 🔑 dans la liste des inscrits). */
+  const userInput = document.getElementById('forgotUser').value.trim();
   const msg = document.getElementById('authMsg');
-  
-  if (!userInput) {
-    showMsg(msg, '❌ Veuillez entrer votre identifiant ou email', true);
-    return;
-  }
-  
-  // Chercher l'utilisateur par username
-  db.collection('users').doc(userInput).get().then(doc => {
-    if (doc.exists) {
-      const user = doc.data();
-      // Générer un nouveau mot de passe
-      const newPassword = 'cc' + Math.floor(1000 + Math.random() * 9000);
-      
-      // Mettre à jour le mot de passe
-      db.collection('users').doc(userInput).update({ password: newPassword })
-        .then(() => {
-          document.getElementById('recoveredPass').innerText = newPassword;
-          document.getElementById('forgotPanel').style.display = 'none';
-          document.getElementById('recoveredPanel').style.display = 'block';
-        })
-        .catch(err => showMsg(msg, '❌ Erreur : ' + err.message, true));
-      return;
-    }
-    
-    // Chercher par email
-    if (userInput.includes('@')) {
-      db.collection('emailIndex').doc(userInput).get().then(emailDoc => {
-        if (emailDoc.exists) {
-          const username = emailDoc.data().username;
-          const newPassword = 'cc' + Math.floor(1000 + Math.random() * 9000);
-          
-          db.collection('users').doc(username).update({ password: newPassword })
-            .then(() => {
-              document.getElementById('recoveredPass').innerText = newPassword;
-              document.getElementById('forgotPanel').style.display = 'none';
-              document.getElementById('recoveredPanel').style.display = 'block';
-            })
-            .catch(err => showMsg(msg, '❌ Erreur : ' + err.message, true));
-        } else {
-          showMsg(msg, '❌ Email non trouvé. Vérifiez votre adresse.', true);
-        }
-      }).catch(() => {
-        showMsg(msg, '❌ Utilisateur ou email non trouvé', true);
-      });
-    } else {
-      showMsg(msg, '❌ Identifiant non trouvé. Vérifiez votre saisie.', true);
-    }
-  }).catch(err => {
-    console.error('Erreur:', err);
-    showMsg(msg, '❌ Erreur de recherche : ' + err.message, true);
-  });
+  showMsg(msg, `🔑 Demandez à votre professeur de réinitialiser votre mot de passe${userInput ? ' (identifiant : ' + userInput + ')' : ''}. Il vous communiquera un nouveau mot de passe.`, false);
+}
+
+/* ✅ Admin : générer un nouveau mot de passe pour un étudiant */
+function adminResetPassword(username) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const np = 'cc' + Math.floor(1000 + Math.random() * 9000);
+  if (!confirm(`Nouveau mot de passe pour « ${username} » : ${np}\n\nConfirmer ?`)) return;
+  db.collection('users').doc(username).update({ password: np })
+    .then(() => { try { navigator.clipboard.writeText(np); } catch (e) {} alert(`✅ Mot de passe de « ${username} » : ${np}\n(copié dans le presse-papiers)`); })
+    .catch(err => alert(`Erreur : ${err.message || err}`));
+}
+
+/* ✅ Admin : tout approuver d'un coup */
+function adminApproveAll() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  db.collection('users').where('approved', '==', false).get().then(snap => {
+    if (!snap.size) { showToast('Aucun compte en attente.'); return; }
+    if (!confirm(`Approuver les ${snap.size} compte(s) en attente ?`)) return;
+    const b = db.batch();
+    snap.docs.forEach(d => b.update(d.ref, { approved: true, status: 'approved' }));
+    return b.commit().then(() => showToast(`✅ ${snap.size} compte(s) approuvé(s)`));
+  }).catch(err => alert(`Erreur : ${err.message || err}`));
+}
+
+/* ✅ Admin : nettoyer les entrées e-mail de comptes supprimés (une fois par session) */
+function adminCleanEmailIndex(usersSnap) {
+  if (window._ccIdxCleaned || !currentUser || currentUser.role !== 'admin') return;
+  window._ccIdxCleaned = true;
+  const ids = new Set(usersSnap.docs.map(d => d.id));
+  db.collection('emailIndex').get().then(snap => {
+    const orphans = snap.docs.filter(d => !ids.has((d.data() || {}).username));
+    if (!orphans.length) return;
+    const b = db.batch(); orphans.slice(0, 450).forEach(d => b.delete(d.ref));
+    return b.commit().then(() => console.log(`🧹 ${orphans.length} e-mail(s) orphelin(s) libéré(s)`));
+  }).catch(e => console.warn('Nettoyage emailIndex :', e));
 }
 
 function showMsg(el, txt, isErr) {
@@ -2070,6 +2103,22 @@ function renderUsersList(snap) {
       rstBtn.onclick = (e) => { e.stopPropagation(); adminResetDownloads(doc.id); };
       actions.appendChild(rstBtn);
 
+      const pwBtn = document.createElement('button');
+      pwBtn.className = 'btn-user-action btn-user-unblock';
+      pwBtn.textContent = '🔑 Mot de passe';
+      pwBtn.title = 'Générer un nouveau mot de passe (étudiant qui l\'a oublié)';
+      pwBtn.onclick = (e) => { e.stopPropagation(); adminResetPassword(doc.id); };
+      actions.appendChild(pwBtn);
+
+      if (u.approved === false) {
+        const apBtn = document.createElement('button');
+        apBtn.className = 'btn-user-action';
+        apBtn.style.cssText = 'background:#22c55e; color:#fff;';
+        apBtn.textContent = '✅ Approuver';
+        apBtn.onclick = (e) => { e.stopPropagation(); adminApproveUser(doc.id); };
+        actions.appendChild(apBtn);
+      }
+
       row.appendChild(actions);
     }
 
@@ -2117,12 +2166,26 @@ function renderPendingApproval(snap) {
       rejectBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(doc.id); };
       actions.appendChild(rejectBtn);
 
+      const pw2 = document.createElement('button');
+      pw2.className = 'btn-user-action btn-user-unblock';
+      pw2.textContent = '🔑 Mot de passe';
+      pw2.onclick = (e) => { e.stopPropagation(); adminResetPassword(doc.id); };
+      actions.appendChild(pw2);
+
       row.appendChild(actions);
     }
 
     ul.appendChild(row);
   });
   if (!snap.size) ul.innerHTML = '<div class="top-item"><span>—</span></div>';
+  else if (currentUser && currentUser.role === 'admin') {
+    const all = document.createElement('button');
+    all.className = 'btn-user-action';
+    all.style.cssText = 'background:#16a34a; color:#fff; width:100%; margin:0 0 8px; padding:8px;';
+    all.textContent = `✅ Tout approuver (${snap.size})`;
+    all.onclick = (e) => { e.stopPropagation(); adminApproveAll(); };
+    ul.insertBefore(all, ul.firstChild);
+  }
 }
 
 /* ================= Export CSV de la liste des inscrits (admin) ================= */
@@ -2176,7 +2239,11 @@ function exportUsersCSV() {
 function adminDeleteUser(username) {
   if (!currentUser || currentUser.role !== 'admin') return;
   if (!confirm(I18N.confirmDeleteUser[lang])) return;
-  db.collection('users').doc(username).delete().then(() => {
+  db.collection('users').doc(username).get().then(d => {
+    const em = d.exists && d.data().email ? String(d.data().email).toLowerCase() : '';
+    return db.collection('users').doc(username).delete().then(() => em);
+  }).then(em => {
+    if (em) db.collection('emailIndex').doc(em).delete().catch(() => {});   // ✅ l'e-mail redevient utilisable
     db.collection('presence').doc(username).delete().catch(() => {});
     db.collection('stats').doc('public').set({ totalUsers: firebase.firestore.FieldValue.increment(-1) }, { merge: true }).catch(() => {});
     showToast(I18N.toastUserDeleted[lang]);
@@ -2261,7 +2328,11 @@ function askSectionIfMissing() {
       currentUser.section = sec; currentUser.classe = cl;
       localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
       location.reload();
-    }).catch(err => alert(`Erreur : ${err.message || err}`));
+    }).catch(() => db.collection('users').doc(currentUser.username).update({ section: sec }).then(() => {
+      currentUser.section = sec; currentUser.classe = cl;
+      localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
+      location.reload();
+    })).catch(err => alert(`Erreur : ${err.message || err}`));
   });
 }
 
@@ -2287,7 +2358,15 @@ function askClasseIfMissing() {
       localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
       box.remove();
       showToast('🏫 ' + cl);
-    }).catch(err => alert(`Erreur : ${err.message || err}`));
+    }).catch(err => {
+      // ✅ Avant : fenêtre impossible à fermer si la base refusait l'écriture
+      // → l'étudiant restait bloqué. Maintenant on garde la classe localement.
+      console.warn('Classe non enregistrée dans la base :', err);
+      currentUser.classe = cl;
+      localStorage.setItem('cc_user_session', JSON.stringify(currentUser));
+      box.remove();
+      showToast('🏫 ' + cl);
+    });
   };
 }
 
@@ -2331,6 +2410,7 @@ function startRealtimeListeners() {
         document.getElementById('totalUsers').innerText = snap.size;
         document.getElementById('stReg').innerText = snap.size;
         renderUsersList(snap);
+        adminCleanEmailIndex(snap);
         try { renderSectionBars('stSecUsers', snap.docs.map(d => d.data()).filter(u => u.role !== 'admin')); } catch (e) {}
         // ✅ Synchronise le compteur public avec le nombre réel (utile une
         // seule fois pour rattraper les comptes déjà inscrits avant ce système).
