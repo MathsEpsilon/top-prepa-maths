@@ -2096,13 +2096,6 @@ function renderUsersList(snap) {
       delBtn.onclick = (e) => { e.stopPropagation(); adminDeleteUser(doc.id); };
       actions.appendChild(delBtn);
 
-      const rstBtn = document.createElement('button');
-      rstBtn.className = 'btn-user-action btn-user-unblock';
-      rstBtn.textContent = lang === 'en' ? '↺ Downloads' : '↺ Téléchargements';
-      rstBtn.title = lang === 'en' ? 'Allow this student to download again' : 'Autoriser de nouveau cet étudiant à télécharger (téléphone perdu…)';
-      rstBtn.onclick = (e) => { e.stopPropagation(); adminResetDownloads(doc.id); };
-      actions.appendChild(rstBtn);
-
       const pwBtn = document.createElement('button');
       pwBtn.className = 'btn-user-action btn-user-unblock';
       pwBtn.textContent = '🔑 Mot de passe';
@@ -3191,7 +3184,11 @@ function renderFileRows(container, list, onMove) {
 
     const btnDl = document.createElement('button');
     btnDl.className = 'btn-dl'; btnDl.textContent = I18N.btnDl[lang];
-    btnDl.onclick = (e) => { e.stopPropagation(); downloadPdf(f.id, f.name); };
+    btnDl.onclick = (e) => {
+      e.stopPropagation();
+      if (ccCanDownload(f.path)) downloadPdf(f.id, f.name);
+      else previewPdf(f.id, f.name);              // autre section : lecture en ligne seulement
+    };
     btnDl.dataset.dl = f.id;
     ccStyleDlBtn(btnDl, f.id, f.path);
 
@@ -3854,9 +3851,10 @@ function startSubscription() {
    🔐 TÉLÉCHARGEMENT CONTRÔLÉ
    1) Consultation libre de toutes les sections ; téléchargement réservé
       aux documents de SA section (+ dossiers communs si DL_COMMUNS_POUR_TOUS).
-   2) Un seul téléchargement par étudiant et par document (collection « dlOnce »).
-   3) Copie personnalisée : nom, identifiant, section, date et code unique
-      imprimés sur chaque page → toute copie transférée est identifiable.
+   2) Téléchargements ILLIMITÉS pour les documents de sa section
+      (journal de chaque téléchargement dans « dlOnce », pour retrouver un code).
+   3) Copie personnalisée : le nom de l'étudiant est imprimé tout en bas de
+      chaque page (avec section, classe, date et code unique).
    ===================================================================== */
 const DL_COMMUNS_POUR_TOUS = true;   // Divers, Bac, Licence : téléchargeables par toutes les sections
 
@@ -3896,8 +3894,8 @@ function ccShowDlNotice() {
     col.insertBefore(n, col.firstChild);
   }
   n.innerHTML = lang === 'en'
-    ? `⚠️ <b>Download rules</b> — you may download only the documents of <b>your class</b>, <b>once</b> each. Every copy carries your name and a personal code. Any forbidden attempt is recorded: after <b>${DL_MAX_TENTATIVES}</b> attempts your account is <b>${DL_SANCTION === 'supprimer' ? 'deleted' : 'blocked'} automatically</b>.`
-    : `⚠️ <b>Règlement des téléchargements</b> — vous ne pouvez télécharger que les documents de <b>votre section</b>, <b>une seule fois</b> chacun. Chaque copie porte votre nom et un code personnel. Toute tentative interdite est enregistrée : après <b>${DL_MAX_TENTATIVES}</b> tentatives, votre compte est <b>${DL_SANCTION === 'supprimer' ? 'supprimé' : 'bloqué'} automatiquement</b>.`;
+    ? `⚠️ <b>Download rules</b> — you may download the documents of <b>your class</b> as often as you like; the other classes are <b>read-only</b>. Your name is printed at the bottom of every page of your copy. Any forbidden attempt is recorded: after <b>${DL_MAX_TENTATIVES}</b> attempts your account is <b>${DL_SANCTION === 'supprimer' ? 'deleted' : 'blocked'} automatically</b>.`
+    : `⚠️ <b>Règlement des téléchargements</b> — vous pouvez télécharger <b>sans limite</b> les documents de <b>votre section</b> ; les autres sections sont en <b>consultation seulement</b>. Votre nom est imprimé tout en bas de chaque page de votre copie. Toute tentative interdite est enregistrée : après <b>${DL_MAX_TENTATIVES}</b> tentatives, votre compte est <b>${DL_SANCTION === 'supprimer' ? 'supprimé' : 'bloqué'} automatiquement</b>.`;
 }
 
 async function ccStrike(motif, docName) {
@@ -3946,10 +3944,9 @@ function ccStyleDlBtn(btn, id, path) {
     btn.textContent = lang === 'en' ? '👁 Read only' : '👁 Consultation';
     btn.title = lang === 'en' ? 'Another class: you can read it, not download it' : 'Autre section : lecture autorisée, téléchargement réservé';
     btn.classList.add('cc-dl-off');
-  } else if (!isRealAdmin() && ccDlLocal()[id]) {
-    btn.textContent = lang === 'en' ? '✓ Downloaded' : '✓ Téléchargé';
-    btn.title = lang === 'en' ? 'Already downloaded (only once allowed)' : 'Déjà téléchargé (une seule fois autorisée)';
-    btn.classList.add('cc-dl-done');
+  } else {
+    btn.textContent = I18N.btnDl[lang];
+    btn.title = lang === 'en' ? 'Download (unlimited) — your name is printed at the bottom of each page' : 'Télécharger (illimité) — votre nom est imprimé en bas de chaque page';
   }
 }
 function ccRefreshDlBtn(id, path) {
@@ -3986,19 +3983,26 @@ async function ccStampPdf(bytes, code) {
   const doc = await L.PDFDocument.load(bytes, { ignoreEncryption: true });
   const fB = await doc.embedFont(L.StandardFonts.HelveticaBold);
   const fR = await doc.embedFont(L.StandardFonts.Helvetica);
-  const who = ccLatin(`${currentUser.name || currentUser.username} (@${currentUser.username})`);
+  const nom = ccLatin(currentUser.name || currentUser.username);
   const d = new Date();
   const quand = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const pied = ccLatin(`Copie personnelle de ${who} - ${sectionLabel(currentUser.section)} - ${quand} - code ${code} - Top Prepa Maths (Chniti Chokri) - diffusion interdite`);
+  const cl = currentUser.classe ? ' - classe ' + currentUser.classe : '';
+  // Ligne 1 (gras) : le nom de l'étudiant ; ligne 2 (petite) : détails + code de traçabilité
+  const ligne1 = ccLatin(`${nom} - ${sectionLabel(currentUser.section)}${cl}`);
+  const ligne2 = ccLatin(`Copie personnelle de @${currentUser.username} - ${quand} - code ${code} - Top Prepa Maths (Chniti Chokri) - diffusion interdite`);
   doc.getPages().forEach(pg => {
-    const { width: w, height: h } = pg.getSize();
-    // (filigrane diagonal au nom de l'étudiant supprimé)
-    // bandeau en bas de page
-    let fs = 7; while (fs > 4 && fR.widthOfTextAtSize(pied, fs) > w - 20) fs -= 0.5;
-    pg.drawText(pied, { x: 10, y: 6, size: fs, font: fR, color: L.rgb(0.6, 0.1, 0.1), opacity: 0.9 });
+    const { width: w } = pg.getSize();
+    let f1 = 9;   while (f1 > 5 && fB.widthOfTextAtSize(ligne1, f1) > w - 24) f1 -= 0.5;
+    let f2 = 6;   while (f2 > 3.5 && fR.widthOfTextAtSize(ligne2, f2) > w - 24) f2 -= 0.5;
+    const l1 = fB.widthOfTextAtSize(ligne1, f1), l2 = fR.widthOfTextAtSize(ligne2, f2);
+    // fond blanc discret pour rester lisible même si la page est remplie jusqu'en bas
+    const bw = Math.max(l1, l2) + 16, bh = f1 + f2 + 8;
+    pg.drawRectangle({ x: (w - bw) / 2, y: 2, width: bw, height: bh, color: L.rgb(1, 1, 1), opacity: 0.85 });
+    pg.drawText(ligne1, { x: (w - l1) / 2, y: 4 + f2 + 2, size: f1, font: fB, color: L.rgb(0.55, 0.08, 0.08) });
+    pg.drawText(ligne2, { x: (w - l2) / 2, y: 4, size: f2, font: fR, color: L.rgb(0.35, 0.35, 0.35) });
   });
   doc.setAuthor('Chniti Chokri - IPEIN Nabeul - Top Prepa Maths');
-  doc.setSubject(ccLatin(`Copie personnelle de ${who} - code ${code}`));
+  doc.setSubject(ccLatin(`Copie personnelle de ${nom} (@${currentUser.username}) - code ${code}`));
   doc.setKeywords(['TopPrepaMaths', code, ccLatin(currentUser.username)]);
   return doc.save();
 }
@@ -4021,20 +4025,9 @@ function downloadPdf(id, name) {
       return;
     }
 
-    // 2) Une seule fois
-    const ref = admin ? null : db.collection('dlOnce').doc(ccDlDocId(id));
-    if (ref) {
-      const prev = await ref.get();
-      if (prev.exists) {
-        ccDlMark(id); ccRefreshDlBtn(id, path);
-        const dt = new Date(prev.data().ts || Date.now()).toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
-        await ccStrike(T(`Vous avez déjà téléchargé ce document le ${dt}. Un seul téléchargement est autorisé : retrouvez-le dans les fichiers de votre téléphone (en cas de perte, demandez au professeur de réinitialiser vos téléchargements).`,
-                         `You already downloaded this document on ${dt}. Only one download is allowed: look for it in your phone's files (if lost, ask the teacher to reset your downloads).`), name);
-        return;
-      }
-      if (!confirm(T(`Télécharger « ${name} » ?\n\n• Un SEUL téléchargement est autorisé : gardez bien le fichier sur votre téléphone.\n• Votre nom et un code personnel seront imprimés sur chaque page : la copie est strictement personnelle, toute copie transférée sera identifiée.`,
-                     `Download "${name}"?\n\n• Only ONE download is allowed: keep the file on your phone.\n• Your name and a personal code will be printed on every page: this copy is strictly personal, any forwarded copy will be traced.`))) return;
-    }
+    // 2) Téléchargement illimité pour sa section : simple confirmation
+    if (!admin && !confirm(T(`Télécharger « ${name} » ?\n\nVotre nom sera imprimé tout en bas de chaque page : cette copie est strictement personnelle.`,
+                             `Download "${name}"?\n\nYour name will be printed at the bottom of every page: this copy is strictly personal.`))) return;
 
     showToast(T('⏳ Préparation de votre copie personnelle…', '⏳ Preparing your personal copy…'));
     const full = await ccWithContent(meta);
@@ -4046,14 +4039,16 @@ function downloadPdf(id, name) {
     try { bytes = await ccStampPdf(ccDataUriBytes(content), code); }
     catch (e) {
       console.error(e);
-      if (!admin) { alert(T('⚠️ Impossible de préparer la copie personnelle (connexion ?). Réessayez : votre droit de téléchargement n\'a pas été utilisé.', '⚠️ Could not prepare your personal copy (connection?). Try again: your download right was not used.')); return; }
+      if (!admin) { alert(T('⚠️ Impossible de préparer la copie personnelle (connexion ?). Réessayez.', '⚠️ Could not prepare your personal copy (connection?). Please try again.')); return; }
       bytes = ccDataUriBytes(content);   // admin : fichier d'origine
     }
 
-    // On enregistre le téléchargement AVANT de donner le fichier (la règle Firestore interdit de le recréer)
-    if (ref) {
-      await ref.set({ u: currentUser.username, n: currentUser.name || '', s: currentUser.section || '', f: id, name, code, ts: Date.now() });
-      ccDlMark(id);
+    // Journal (une entrée par téléchargement, identifiant unique) : sert à retrouver l'étudiant à partir du code.
+    // Il n'est jamais bloquant : si la règle Firestore le refuse, le téléchargement a lieu quand même.
+    if (!admin) {
+      db.collection('dlOnce').doc(ccDlDocId(id) + '__' + code)
+        .set({ u: currentUser.username, n: currentUser.name || '', s: currentUser.section || '', c: currentUser.classe || '', f: id, name, code, ts: Date.now() })
+        .catch(e => console.warn('Journal des téléchargements :', e && e.code));
     }
 
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
@@ -4068,7 +4063,7 @@ function downloadPdf(id, name) {
   })().catch(err => {
     console.error(err);
     if (err && err.code === 'permission-denied') {
-      showToast(admin ? '⚠️ Ajoutez la règle « dlOnce » dans Firestore.' : "🔒 Téléchargement refusé (déjà effectué ou non autorisé).");
+      showToast(admin ? '⚠️ Ajoutez la règle « dlOnce » dans Firestore.' : "🔒 Téléchargement refusé (document d'une autre section).");
     } else {
       showToast("Erreur, réessaie.");
     }
@@ -4130,7 +4125,7 @@ function adminTraceCode() {
   db.collection('dlOnce').where('code', '==', code.trim().toUpperCase()).get().then(snap => {
     if (snap.empty) { alert('Aucun téléchargement ne correspond à ce code.'); return; }
     const d = snap.docs[0].data();
-    alert(`Ce PDF a été téléchargé par :\n\n👤 ${d.n || '—'} (@${d.u})\n🎓 ${sectionLabel(d.s)}\n📕 ${d.name}\n📅 ${new Date(d.ts).toLocaleString('fr-FR')}`);
+    alert(`Ce PDF a été téléchargé par :\n\n👤 ${d.n || '—'} (@${d.u})\n🎓 ${sectionLabel(d.s)}${d.c ? ' — classe ' + d.c : ''}\n📕 ${d.name}\n📅 ${new Date(d.ts).toLocaleString('fr-FR')}`);
   }).catch(e => alert(e.code === 'permission-denied' ? 'Ajoutez la règle « dlOnce » dans Firestore.' : (e.message || e)));
 }
 
