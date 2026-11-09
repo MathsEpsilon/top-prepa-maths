@@ -6,10 +6,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Top Prepa Maths">
+<meta name="apple-mobile-web-app-title" content="Top Prepa">
 <meta name="theme-color" content="#0f2a5c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230f2a5c'/><text x='32' y='45' font-size='38' text-anchor='middle' fill='%23f59e0b' font-family='Georgia'>Σ</text></svg>">
 <title>Top Prepa Maths</title>
+<!-- Application installable (PWA) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -9834,6 +9838,53 @@ body.compact #ccBF { top:8px; gap:6px; } body.compact #ccBF .bf { padding:6px 10
   setInterval(refresh, 3000);
   setInterval(() => { if (!paused && pages.length > 1 && !document.hidden) go(1); }, 8000);
   window.ccBannerFormulas = F;
+})();
+</script>
+<!-- ===== Installation de l'application (PWA) ===== -->
+<style>
+#tpmInstall { position:fixed; top:78px; left:50%; transform:translateX(-50%); z-index:1400;
+  display:none; align-items:center; gap:10px; padding:8px 8px 8px 16px; border-radius:999px;
+  background:#f59e0b; color:#0f2a5c; font-weight:800; font-size:14px;
+  box-shadow:0 6px 18px rgba(15,42,92,.35); max-width:94vw; }
+#tpmInstall.show { display:flex; }
+#tpmInstall button { border:none; cursor:pointer; font-weight:800; border-radius:999px; }
+#tpmInstallGo { background:#0f2a5c; color:#fff; padding:8px 14px; font-size:13.5px; }
+#tpmInstallX { background:transparent; color:#0f2a5c; width:30px; height:30px; font-size:18px; }
+#tpmInstallGo:focus-visible, #tpmInstallX:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+</style>
+<div id="tpmInstall" role="dialog" aria-label="Installer l'application">
+  <span>📲 Top Prepa sur votre écran d'accueil</span>
+  <button id="tpmInstallGo" type="button">Installer</button>
+  <button id="tpmInstallX" type="button" aria-label="Fermer">×</button>
+</div>
+<script>
+(function () {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });
+  }
+  var bar = document.getElementById('tpmInstall'), go = document.getElementById('tpmInstallGo'), x = document.getElementById('tpmInstallX');
+  var invite = null, CLE = 'tpm_install_ferme';
+  var installee = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  var estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function fermeRecemment() {
+    try { var t = +localStorage.getItem(CLE) || 0; return Date.now() - t < 7 * 864e5; } catch (e) { return false; }
+  }
+  function montrer() { if (!installee && !fermeRecemment()) bar.classList.add('show'); }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); invite = e; montrer(); });
+  window.addEventListener('appinstalled', function () { bar.classList.remove('show'); });
+  if (estIOS) montrer();
+  go.addEventListener('click', function () {
+    if (invite) {
+      invite.prompt();
+      invite.userChoice.then(function () { invite = null; bar.classList.remove('show'); });
+    } else {
+      alert("Sur iPhone / iPad (Safari) : touchez le bouton Partager (carré avec une flèche vers le haut), puis « Sur l'écran d'accueil ».");
+    }
+  });
+  x.addEventListener('click', function () {
+    bar.classList.remove('show');
+    try { localStorage.setItem(CLE, String(Date.now())); } catch (e) {}
+  });
 })();
 </script>
 </body>
