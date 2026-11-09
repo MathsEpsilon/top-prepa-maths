@@ -8840,7 +8840,6 @@ body.nav-icons #zoomWidget { left:110px !important; }
     const m = LS.get(minKey(), {}); const k = dayKey(); const before = m[k] || 0; m[k] = before + 1;
     const keys = Object.keys(m).sort(); while (keys.length > 120) delete m[keys.shift()];
     LS.set(minKey(), m);
-    if (before < goalMin() && m[k] >= goalMin()) toast(t('goalOk'));
     refreshHome();
   }, 60000);
   function ring(p, col) {
@@ -8872,6 +8871,9 @@ body.nav-icons #zoomWidget { left:110px !important; }
 
   /* ====================== Cartes de l'accueil (annonces, objectif, aujourd'hui) ====================== */
   function refreshHome() {
+    // Cartes « Objectif du jour » et « Aujourd'hui » retirées de l'accueil
+    const old = $('ccHomeExtra'); if (old) old.remove();
+    return;
     const hv = $('homeView'); if (!hv || hv.style.display !== 'block' || hv.querySelector('.hm-crumbs')) return;
     let box = $('ccHomeExtra');
     if (!box) { box = document.createElement('div'); box.id = 'ccHomeExtra'; box.className = 'hm-extra'; const anchor = hv.querySelector('.hm-sec'); if (!anchor) return; hv.insertBefore(box, anchor); }
@@ -8891,7 +8893,7 @@ body.nav-icons #zoomWidget { left:110px !important; }
     box.innerHTML = goalCard + ttCard;
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-hx]'); if (!b) return; if (b.dataset.hx === 'ann') openAnn(); else openTT(); });
-  const hvObs = new MutationObserver(() => { const hv = $('homeView'); if (hv && hv.style.display === 'block' && !$('ccHomeExtra')) refreshHome(); });
+  const hvObs = new MutationObserver(() => {});
 
   /* ====================== 7. DÉFI CALCUL CHRONO ====================== */
   const ANG = [['0', 0], ['\\frac{\\pi}{6}', Math.PI / 6], ['\\frac{\\pi}{4}', Math.PI / 4], ['\\frac{\\pi}{3}', Math.PI / 3], ['\\frac{\\pi}{2}', Math.PI / 2],
@@ -9074,13 +9076,8 @@ body.nav-icons #zoomWidget { left:110px !important; }
   }
   function renderBox() {
     const T = tiles();
-    $('ccBox').innerHTML = head('🧰 ' + t('box')) + `<div class="cc-dbody"><div class="bx-grid">${T.map(([i, k, , c, b], n) => `<button class="bx-tile" data-bx="${n}" style="--c1:${c[0]};--c2:${c[1]}">${b ? `<span class="b">${b}</span>` : ''}<span class="i">${i}</span>${esc(t(k))}</button>`).join('')}</div>
-      <div class="cc-sec" style="margin-top:18px"><h4>🎯 ${t('goal')}</h4>
-      <div class="cc-row"><span>${t('goalSet')}</span><input class="mt-in mt-small" type="number" min="5" step="5" id="bxGm" value="${goalMin()}"></div>
-      <div class="cc-row"><span>${t('goalDocs')}</span><input class="mt-in mt-small" type="number" min="1" id="bxGd" value="${goalDocs()}"></div></div></div>`;
+    $('ccBox').innerHTML = head('🧰 ' + t('box')) + `<div class="cc-dbody"><div class="bx-grid">${T.map(([i, k, , c, b], n) => `<button class="bx-tile" data-bx="${n}" style="--c1:${c[0]};--c2:${c[1]}">${b ? `<span class="b">${b}</span>` : ''}<span class="i">${i}</span>${esc(t(k))}</button>`).join('')}</div></div>`;
     $('ccBox').querySelectorAll('[data-bx]').forEach(b => b.onclick = () => T[+b.dataset.bx][2]());
-    $('bxGm').onchange = e => { UI.setPref('goalMin', Math.max(5, +e.target.value || 60)); refreshHome(); };
-    $('bxGd').onchange = e => { UI.setPref('goalDocs', Math.max(1, +e.target.value || 3)); refreshHome(); };
   }
   function openBox() { renderBox(); UI.openDrawer('ccBox'); }
 
