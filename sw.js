@@ -2,9 +2,9 @@
 // Réseau d'abord : les élèves voient toujours la dernière version du site.
 // Le cache ne sert qu'en secours si le téléphone est hors connexion.
 // Les requêtes vers Firebase (autres domaines) ne sont jamais interceptées.
-const CACHE = "tpm-v1";
+const CACHE = "tpm-v2";
 const FICHIERS = ["./", "./index.html", "./manifest.webmanifest",
-                  "./icons/icon-192.png", "./icons/icon-512.png"];
+                  "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS)));
